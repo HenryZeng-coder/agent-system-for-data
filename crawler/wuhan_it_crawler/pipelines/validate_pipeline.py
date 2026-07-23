@@ -2,6 +2,7 @@
 
 import re
 import logging
+from scrapy.exceptions import DropItem
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,6 @@ class ValidatePipeline:
         # company_name 必须非空
         if not item.get('company_name'):
             logger.warning(f"缺少企业名称，丢弃")
-            from .dedup_pipeline import DropItem
             raise DropItem("缺少企业名称")
 
         # credit_code 格式校验 (可选但必须合规)

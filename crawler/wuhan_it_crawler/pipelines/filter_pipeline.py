@@ -21,7 +21,6 @@ class FilterPipeline:
 
         if not any(kw in text for kw in IT_KEYWORDS):
             logger.debug(f"非IT企业过滤: {item.get('company_name')}")
-            from .dedup_pipeline import DropItem
             raise DropItem(f"非IT企业: {item.get('company_name')}")
 
         return item

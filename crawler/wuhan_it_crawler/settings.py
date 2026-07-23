@@ -28,6 +28,7 @@ ITEM_PIPELINES = {
 DOWNLOADER_MIDDLEWARES = {
     'wuhan_it_crawler.middlewares.ProxyMiddleware': 100,
     'wuhan_it_crawler.middlewares.UARotateMiddleware': 200,
+    'wuhan_it_crawler.middlewares.RetryMiddleware': 300,
 }
 
 # 断点续传

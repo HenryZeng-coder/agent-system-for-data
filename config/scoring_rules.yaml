@@ -65,13 +65,13 @@ industry_match:
       - "大数据"
       - "系统集成"
       - "软件开发"
-    score_per_match: 2
+    high_score_per_match: 2
     low_match_keywords:
       - "运维"
       - "硬件"
       - "网络工程"
       - "监控"
-    score_per_match: -1
+    low_score_per_match: -1
 
 it_filter_keywords:
   - "软件"

@@ -122,8 +122,79 @@ class GLMRatingClient:
             return False
 
     def update_database(self, results: List[Dict], database_url: str):
-        # TODO: 实现数据库写入 ratings + 更新 companies.status='rated'
-        pass
+        import psycopg2
+
+        if not results:
+            logger.warning("results 为空，跳过数据库更新")
+            return
+
+        conn = None
+        try:
+            conn = psycopg2.connect(database_url)
+            cur = conn.cursor()
+
+            success_ids = []
+            failed_ids = []
+
+            for result in results:
+                company_id = result.get("company_id")
+                if company_id is None:
+                    logger.warning(f"结果缺少 company_id，跳过: {result}")
+                    continue
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO ratings
+                            (company_id, total_score, rating_level, demand_tags, sales_pitch, reasoning, rated_by, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                        ON CONFLICT (company_id, rated_by) DO UPDATE SET
+                            total_score = EXCLUDED.total_score,
+                            rating_level = EXCLUDED.rating_level,
+                            demand_tags = EXCLUDED.demand_tags,
+                            sales_pitch = EXCLUDED.sales_pitch,
+                            reasoning = EXCLUDED.reasoning,
+                            created_at = NOW()
+                        """,
+                        (
+                            company_id,
+                            result.get("score"),
+                            result.get("level"),
+                            json.dumps(result.get("demand_tags"), ensure_ascii=False),
+                            result.get("sales_pitch"),
+                            result.get("reasoning"),
+                            "glm",
+                        ),
+                    )
+                    success_ids.append(company_id)
+                except Exception as e:
+                    logger.error(f"写入 ratings 失败, company_id={company_id}: {e}")
+                    failed_ids.append(company_id)
+
+            # 更新 companies 状态
+            if success_ids:
+                cur.execute(
+                    "UPDATE companies SET status = 'rated' WHERE id = ANY(%s)",
+                    (success_ids,),
+                )
+                logger.info(f"已将 {len(success_ids)} 家企业状态更新为 rated: {success_ids}")
+
+            if failed_ids:
+                cur.execute(
+                    "UPDATE companies SET status = 'retry' WHERE id = ANY(%s)",
+                    (failed_ids,),
+                )
+                logger.warning(f"已将 {len(failed_ids)} 家企业状态更新为 retry: {failed_ids}")
+
+            conn.commit()
+            logger.info(f"数据库更新完成: 成功 {len(success_ids)}, 失败 {len(failed_ids)}")
+
+        except Exception as e:
+            logger.error(f"数据库更新异常: {e}")
+            if conn:
+                conn.rollback()
+        finally:
+            if conn:
+                conn.close()
 
 
 if __name__ == "__main__":

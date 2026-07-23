@@ -2,6 +2,7 @@
 
 import logging
 import psycopg2
+from scrapy.exceptions import DropItem
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,3 @@ class DedupPipeline:
         if credit_code:
             self.seen_codes.add(credit_code)
         return item
-
-
-class DropItem(Exception):
-    pass

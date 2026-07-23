@@ -82,12 +82,14 @@ class RatingRulesEngine:
         score = 0
         rules = self.config.get("industry_match", {}).get("rules", {})
         scope = data.get("business_scope", "") or ""
+        high_score = rules.get("high_score_per_match", 2)
+        low_score = rules.get("low_score_per_match", -1)
         for kw in rules.get("high_match_keywords", []):
             if kw in scope:
-                score += rules.get("score_per_match", 2)
+                score += high_score
         for kw in rules.get("low_match_keywords", []):
             if kw in scope:
-                score += rules.get("score_per_match", -1)
+                score += low_score
         return max(0, min(score, 10))
 
     def batch_score(self, database_url: str, mode="incremental") -> dict:
