@@ -1,0 +1,24 @@
+# 武汉IT企业智能评级系统 — 核心依赖
+# Python 3.11+
+
+# 爬虫
+scrapy>=2.11
+playwright>=1.40
+scrapy-playwright>=0.0.33
+
+# 数据库
+psycopg2-binary>=2.9
+
+# 配置/环境
+python-dotenv>=1.0
+pyyaml>=6.0
+
+# HTTP
+requests>=2.31
+
+# 验证码
+ddddocr>=1.5
+
+# 数据处理/导出
+pandas>=2.1
+openpyxl>=3.1

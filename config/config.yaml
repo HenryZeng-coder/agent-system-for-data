@@ -1,0 +1,46 @@
+# ============================================================
+# 武汉IT企业智能评级系统 - 全局配置
+# ============================================================
+
+database:
+  url: "postgresql://kc@localhost:5432/rating_system"
+  pool_size: 5
+  max_overflow: 10
+
+glm:
+  api_key_env: "GLM_API_KEY"
+  base_url: "https://open.bigmodel.cn/api/paas/v4"
+  model: "GLM-5.1"
+  temperature: 0.1
+  max_tokens: 500
+  timeout: 30
+  batch_size: 5
+  rate_limit_seconds: 0.5
+
+crawler:
+  concurrent_requests: 8
+  concurrent_per_domain: 2
+  download_delay: 0.5
+  download_timeout: 30
+  retry_times: 3
+  jobdir: "jobs/default"
+
+proxy:
+  enabled: true
+  pool_api_env: "PROXY_POOL_API"
+  max_failures: 3
+  check_interval: 300
+
+scoring:
+  pass_threshold: 60
+  rules_config: "config/scoring_rules.yaml"
+
+schedule:
+  daily_incremental: "0 2 * * *"
+  hot_track: "0 */6 * * *"
+  full_scan: "manual"
+
+report:
+  output_dir: "data/reports"
+  lead_levels: ["S", "A"]
+  notify_on_new_leads: true
