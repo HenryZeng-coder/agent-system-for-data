@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class ValidatePipeline:
     """关键字段完整性验证"""
 
-    CREDIT_CODE_PATTERN = re.compile(r'^[0-9A-HJ-NP-RTUW-Y]{2}\d{6}[0-9A-HJ-NP-RTUW-Y]{10}$')
+    CREDIT_CODE_PATTERN = re.compile(r'^[0-9A-Z]{18}$')
 
     def process_item(self, item, spider):
         # company_name 必须非空

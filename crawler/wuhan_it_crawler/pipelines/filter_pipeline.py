@@ -1,6 +1,7 @@
 """② IT行业过滤管道"""
 
 import logging
+from scrapy.exceptions import DropItem
 
 logger = logging.getLogger(__name__)
 
