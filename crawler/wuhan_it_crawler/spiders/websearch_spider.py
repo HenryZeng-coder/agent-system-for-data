@@ -23,6 +23,7 @@ class WebSearchSpider(scrapy.Spider):
 
     name = 'websearch'
     allowed_domains = []
+    start_urls = ['data:,']  # 哑URL — 本 spider 在 __init__ 中完成搜索，无需 HTTP
 
     DIGITAL_KEYWORDS = ['数字化转型', 'AI', '人工智能', '云计算', '大模型', '数字化', '智能化']
     POSITIVE_WORDS = ['获融', '融资', '发布', '创新', '突破', '领先', '增长', '签约', '合作']
@@ -39,8 +40,9 @@ class WebSearchSpider(scrapy.Spider):
         self.company_override = company
         self.companies = []
         self.stats = {'items_yielded': 0, 'items_dropped': 0}
+        self._prebuilt_items = []
 
-    def start_requests(self):
+        # 在 __init__ 中加载企业并执行搜索
         self._load_companies()
         if not self.companies:
             self.logger.warning("未找到企业，跳过")
@@ -76,9 +78,13 @@ class WebSearchSpider(scrapy.Spider):
                     )
                     if item:
                         self.stats['items_yielded'] += 1
-                        yield item
+                        self._prebuilt_items.append(item)
             except Exception as e:
                 self.logger.error(f"搜索 '{query}' 失败: {e}")
+
+    def parse(self, response):
+        """直接返回预构建的 items"""
+        return self._prebuilt_items
 
     def closed(self, reason):
         self.logger.info(

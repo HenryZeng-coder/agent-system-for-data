@@ -60,19 +60,38 @@ class BiddingSpider(scrapy.Spider):
             'items_yielded': 0, 'digital_count': 0, 'items_dropped': 0,
         }
 
-    def start_requests(self):
+        # 在 __init__ 中生成 start_urls
         self._load_companies()
+        self.start_urls = self._generate_start_urls()
+
+    def _generate_start_urls(self):
+        """生成搜索 URL 列表"""
         keywords = [self.keyword_override] if self.keyword_override else self.SEARCH_KEYWORDS
         self.logger.info(f"启动招投标爬虫, 关键词数={len(keywords)}, 已知企业={len(self.companies_map)}")
 
+        urls = []
         for kw in keywords:
             self.stats['search_requests'] += 1
-            yield scrapy.Request(
-                url=f'{self.CCGP_SEARCH_URL}?searchtype=1&bidSort=0&bidType=1&dbselect=bidx&kw={quote_plus(kw)}&start_time={self._date_range_start()}&end_time={datetime.now().strftime("%Y:%m:%d")}&timeType=6&pppStatus=0&agentName=',
-                callback=self.parse_list,
-                meta={'search_keyword': kw, 'page': 0},
-                errback=self.errback_request,
+            urls.append(
+                f'{self.CCGP_SEARCH_URL}?searchtype=1&bidSort=0&bidType=1&dbselect=bidx'
+                f'&kw={quote_plus(kw)}&start_time={self._date_range_start()}'
+                f'&end_time={datetime.now().strftime("%Y:%m:%d")}&timeType=6&pppStatus=0&agentName='
+                + f'#search_keyword={kw}&page=0'
             )
+        return urls
+
+    def parse(self, response):
+        """统一入口 — 从 URL hash 提取 meta，分发到 parse_list"""
+        fragment = response.url.split('#')[-1] if '#' in response.url else ''
+        meta = {}
+        if fragment:
+            for pair in fragment.split('&'):
+                if '=' in pair:
+                    k, v = pair.split('=', 1)
+                    meta[k] = v
+        response.meta['search_keyword'] = meta.get('search_keyword', '')
+        response.meta['page'] = int(meta.get('page', 0))
+        return self.parse_list(response)
 
     def closed(self, reason):
         self.logger.info(

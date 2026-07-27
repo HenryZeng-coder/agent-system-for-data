@@ -86,14 +86,17 @@ class TechSpider(scrapy.Spider):
             'items_dropped': 0,
         }
 
-    def start_requests(self):
-        """从数据库读取企业列表，生成搜索请求"""
+        # 在 __init__ 中加载企业并生成 start_urls
         self._load_companies()
         self._setup_github_headers()
+        self.start_urls = self._generate_start_urls()
 
+    def _generate_start_urls(self):
+        """根据企业列表生成搜索 URL"""
+        urls = []
         if not self.companies:
             self.logger.warning("未找到企业，跳过")
-            return
+            return urls
 
         self.logger.info(f"启动技术能力爬虫, 企业数={len(self.companies)}")
 
@@ -101,32 +104,36 @@ class TechSpider(scrapy.Spider):
             cid = company['id']
             name = company['company_name']
 
-            # 第1步: 百度搜索企业官网
-            yield scrapy.Request(
-                url=f'{self.BAIDU_URL}?wd={quote_plus(name + " 官网")}&rn=5',
-                callback=self.parse_website_search,
-                meta={
-                    'company_id': cid,
-                    'company_name': name,
-                },
-                errback=self.errback_request,
+            # 百度搜索企业官网
+            urls.append(
+                f'{self.BAIDU_URL}?wd={quote_plus(name + " 官网")}&rn=5'
+                + f'#company_id={cid}&company_name={name}&step=search'
             )
 
-            # 第2步: GitHub API 搜索组织
-            # 用企业名简称搜索 (去掉"武汉"、"有限"等)
-            short_name = self._shorten_name(name)
-            github_query = f'{short_name} location:Wuhan'
-            yield scrapy.Request(
-                url=f'{self.GITHUB_API_URL}/search/users?q={quote_plus(github_query)}&per_page=5',
-                callback=self.parse_github_search,
-                headers=self.github_headers,
-                meta={
-                    'company_id': cid,
-                    'company_name': name,
-                    'short_name': short_name,
-                },
-                errback=self.errback_request,
-            )
+        return urls
+
+    def parse(self, response):
+        """统一入口 — 从 URL hash 提取 meta，分发到对应解析器"""
+        fragment = response.url.split('#')[-1] if '#' in response.url else ''
+        meta = {}
+        if fragment:
+            for pair in fragment.split('&'):
+                if '=' in pair:
+                    k, v = pair.split('=', 1)
+                    meta[k] = v
+
+        step = meta.get('step', 'search')
+        response.meta['company_id'] = int(meta.get('company_id', 0))
+        response.meta['company_name'] = meta.get('company_name', '')
+
+        if step == 'search':
+            return self.parse_website_search(response)
+        elif step == 'website':
+            return self.parse_website(response)
+        elif step == 'github':
+            return self.parse_github_search(response)
+        elif step == 'github_repos':
+            return self.parse_github_repos(response)
 
     def closed(self, reason):
         self.logger.info(

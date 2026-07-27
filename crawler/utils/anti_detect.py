@@ -4,7 +4,10 @@ import random
 import socket
 import struct
 
-from crawler.utils.ua_rotator import UARotator
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+from ua_rotator import UARotator
 
 
 class AntiDetect:

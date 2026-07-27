@@ -67,17 +67,16 @@ class NewsSpider(scrapy.Spider):
             'items_dropped': 0,
         }
 
-    # ================================================================
-    # 生命周期
-    # ================================================================
-
-    def start_requests(self):
-        """从数据库读取企业列表，生成搜索请求"""
+        # 在 __init__ 中加载企业并生成 start_urls
         self._load_companies()
+        self.start_urls = self._generate_start_urls()
 
+    def _generate_start_urls(self):
+        """根据企业列表生成搜索 URL"""
+        urls = []
         if not self.companies:
             self.logger.warning("未找到任何企业，跳过新闻采集")
-            return
+            return urls
 
         self.logger.info(
             f"启动新闻舆情爬虫, 模式={self.mode}, 企业数={len(self.companies)}"
@@ -89,29 +88,53 @@ class NewsSpider(scrapy.Spider):
 
             # 百度新闻搜索
             self.stats['search_requests'] += 1
-            yield scrapy.Request(
-                url=f'{self.BAIDU_NEWS_URL}?word={quote_plus(keyword)}&tn=news&from=news&cl=2&rn=20',
-                callback=self.parse_baidu,
-                meta={
-                    'company_id': company['id'],
-                    'company_name': name,
-                    'source_name': 'baidu',
-                },
-                errback=self.errback_request,
+            urls.append(
+                f'{self.BAIDU_NEWS_URL}?word={quote_plus(keyword)}&tn=news&from=news&cl=2&rn=20'
+                + f'#company_id={company["id"]}&company_name={name}&source=baidu'
             )
 
             # 搜狗新闻搜索
             self.stats['search_requests'] += 1
-            yield scrapy.Request(
-                url=f'{self.SOGOU_NEWS_URL}?query={quote_plus(keyword)}&sort=1',
-                callback=self.parse_sogou,
-                meta={
-                    'company_id': company['id'],
-                    'company_name': name,
-                    'source_name': 'sogou',
-                },
-                errback=self.errback_request,
+            urls.append(
+                f'{self.SOGOU_NEWS_URL}?query={quote_plus(keyword)}&sort=1'
+                + f'#company_id={company["id"]}&company_name={name}&source=sogou'
             )
+
+        return urls
+
+    def parse(self, response):
+        """统一入口 — 根据URL来源分发到百度或搜狗解析器"""
+        # 从 URL hash 中提取 meta 信息
+        fragment = response.url.split('#')[-1] if '#' in response.url else ''
+        meta = {}
+        if fragment:
+            for pair in fragment.split('&'):
+                if '=' in pair:
+                    k, v = pair.split('=', 1)
+                    meta[k] = v
+
+        company_id = int(meta.get('company_id', 0))
+        company_name = meta.get('company_name', '')
+        source = meta.get('source', '')
+
+        if source == 'baidu':
+            response.meta['company_id'] = company_id
+            response.meta['company_name'] = company_name
+            return self.parse_baidu(response)
+        elif source == 'sogou':
+            response.meta['company_id'] = company_id
+            response.meta['company_name'] = company_name
+            return self.parse_sogou(response)
+        else:
+            # 无 meta 信息时根据 URL 判断
+            if 'baidu.com' in response.url:
+                response.meta['company_id'] = company_id
+                response.meta['company_name'] = company_name
+                return self.parse_baidu(response)
+            elif 'sogou.com' in response.url:
+                response.meta['company_id'] = company_id
+                response.meta['company_name'] = company_name
+                return self.parse_sogou(response)
 
     def closed(self, reason):
         """Spider 关闭时输出统计"""

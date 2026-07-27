@@ -71,13 +71,16 @@ class RecruitmentSpider(scrapy.Spider):
             'items_dropped': 0,
         }
 
-    def start_requests(self):
-        """从数据库读取企业列表，生成搜索请求"""
+        # 在 __init__ 中生成 start_urls
         self._load_companies()
+        self.start_urls = self._generate_start_urls()
 
+    def _generate_start_urls(self):
+        """根据企业列表生成搜索 URL"""
+        urls = []
         if not self.companies:
             self.logger.warning("未找到企业，跳过")
-            return
+            return urls
 
         self.logger.info(
             f"启动招聘爬虫, 企业数={len(self.companies)}, 搜索源={self.source}"
@@ -86,45 +89,50 @@ class RecruitmentSpider(scrapy.Spider):
         for company in self.companies:
             name = company['company_name']
 
-            # BOSS直聘搜索 (为主)
             if self.source in ('boss', 'all'):
                 self.stats['search_requests'] += 1
-                yield scrapy.Request(
-                    url=f'{self.BOSS_URL}?query={quote_plus(name)}&city=101200100&experience=&page=1',
-                    callback=self.parse_boss,
-                    meta={
-                        'company_id': company['id'],
-                        'company_name': name,
-                        'page': 1,
-                    },
-                    errback=self.errback_request,
+                urls.append(
+                    f'{self.BOSS_URL}?query={quote_plus(name)}&city=101200100&experience=&page=1'
+                    + f'#company_id={company["id"]}&company_name={name}&page=1&src=boss'
                 )
 
-            # 拉勾搜索 (为辅)
             if self.source in ('lagou', 'all'):
                 self.stats['search_requests'] += 1
-                yield scrapy.Request(
-                    url=f'{self.LAGOU_URL}/{quote_plus(name)}/?city=%E6%AD%A6%E6%B1%89',
-                    callback=self.parse_lagou,
-                    meta={
-                        'company_id': company['id'],
-                        'company_name': name,
-                    },
-                    errback=self.errback_request,
+                urls.append(
+                    f'{self.LAGOU_URL}/{quote_plus(name)}/?city=%E6%AD%A6%E6%B1%89'
+                    + f'#company_id={company["id"]}&company_name={name}&src=lagou'
                 )
 
-            # 猎聘搜索 (为辅)
             if self.source in ('liepin', 'all'):
                 self.stats['search_requests'] += 1
-                yield scrapy.Request(
-                    url=f'{self.LIEPIN_URL}?key={quote_plus(name)}&city=410',
-                    callback=self.parse_liepin,
-                    meta={
-                        'company_id': company['id'],
-                        'company_name': name,
-                    },
-                    errback=self.errback_request,
+                urls.append(
+                    f'{self.LIEPIN_URL}?key={quote_plus(name)}&city=410'
+                    + f'#company_id={company["id"]}&company_name={name}&src=liepin'
                 )
+
+        return urls
+
+    def parse(self, response):
+        """统一入口 — 根据 URL hash 中的 src 分发"""
+        fragment = response.url.split('#')[-1] if '#' in response.url else ''
+        meta = {}
+        if fragment:
+            for pair in fragment.split('&'):
+                if '=' in pair:
+                    k, v = pair.split('=', 1)
+                    meta[k] = v
+
+        src = meta.get('src', 'boss')
+        response.meta['company_id'] = int(meta.get('company_id', 0))
+        response.meta['company_name'] = meta.get('company_name', '')
+        response.meta['page'] = int(meta.get('page', 1))
+
+        if src == 'boss':
+            return self.parse_boss(response)
+        elif src == 'lagou':
+            return self.parse_lagou(response)
+        elif src == 'liepin':
+            return self.parse_liepin(response)
 
     def closed(self, reason):
         self.logger.info(
