@@ -44,6 +44,7 @@ class BusinessSpider(scrapy.Spider):
         'DOWNLOAD_DELAY': 1.0,           # gsxt 反爬严，加大延迟
         'DOWNLOAD_TIMEOUT': 60,
         'PLAYWRIGHT_BROWSER_TYPE': 'chromium',
+        'PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT': 30000,
         'TWISTED_REACTOR': 'twisted.internet.asyncioreactor.AsyncioSelectorReactor',
         'DOWNLOAD_HANDLERS': {
             'http': 'scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler',
@@ -69,14 +70,8 @@ class BusinessSpider(scrapy.Spider):
             'captcha_encountered': 0,
         }
 
-    # ================================================================
-    # 生命周期
-    # ================================================================
-
-    def start_requests(self):
-        """生成搜索请求 — 遍历 地点+行业 关键词组合"""
+        # 在 __init__ 中准备搜索关键词和 start_urls
         self._load_existing_codes()
-
         if self.keyword_override:
             keywords = [f'{self.locations[0]}{self.keyword_override}']
         else:
@@ -88,7 +83,17 @@ class BusinessSpider(scrapy.Spider):
 
         self.logger.info(f"启动工商信息爬虫, 模式={self.mode}, 关键词数={len(keywords)}, 已有企业={len(self.seen_credit_codes)}")
 
-        for kw in keywords:
+        # 存储搜索关键词列表供 async start() 使用
+        self._search_keywords = keywords
+
+    async def start(self):
+        """Scrapy 2.17 异步 start — yield 带 Playwright meta 的请求
+
+        Scrapy 2.13+ 使用 async def start() 替代 start_requests()。
+        此方法 yield 的 Request 可携带任意 meta（如 Playwright 配置），
+        不受 start_urls 的 meta 注入限制。
+        """
+        for kw in self._search_keywords:
             self.stats['search_requests'] += 1
             yield scrapy.Request(
                 url=f'{self.GSXT_SEARCH_URL}?search={quote_plus(kw)}',
@@ -123,6 +128,18 @@ class BusinessSpider(scrapy.Spider):
         page = response.meta.get('playwright_page')
         keyword = response.meta.get('search_keyword', '')
         max_retries = response.meta.get('max_retries', 3)
+
+        # 从 URL fragment 中恢复 meta 信息 (start_urls 模式)
+        if not keyword and '#' in response.url:
+            fragment = response.url.split('#')[-1]
+            for pair in fragment.split('&'):
+                if '=' in pair:
+                    k, v = pair.split('=', 1)
+                    if k == 'search_keyword':
+                        from urllib.parse import unquote_plus
+                        keyword = unquote_plus(v)
+                    elif k == 'max_retries':
+                        max_retries = int(v)
 
         try:
             # 检测验证码页面
