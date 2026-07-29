@@ -19,6 +19,10 @@ data/reports/*.md
 crawler/jobs/
 crawler/.scrapy
 
+# 测试/覆盖率
+.pytest_cache/
+.coverage
+
 # macOS
 .DS_Store
 
@@ -29,4 +33,3 @@ crawler/.scrapy
 # 临时文件
 *.log
 *.tmp
-.coverage
