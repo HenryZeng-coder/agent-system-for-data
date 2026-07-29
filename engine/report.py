@@ -162,17 +162,22 @@ class ReportGenerator:
     # ------------------------------------------------------------------
 
     def export_leads(self, levels=None, output_path: str = None) -> str:
-        """导出指定等级的销售线索 (CSV + Excel)
+        """导出评级企业线索 (CSV + Excel) — 支持与已有文件合并
+
+        核心逻辑:
+        1. 从数据库查询指定等级的企业 (默认全量 S/A/B/C/D)
+        2. 如已有CSV文件，按 credit_code 合并 (新数据覆盖旧数据)
+        3. 写入固定的文件名 all_rated_companies.csv/.xlsx
 
         Args:
-            levels: 评级等级列表，默认 ["S", "A"]
-            output_path: 输出路径前缀 (不含扩展名)，默认自动生成
+            levels: 评级等级列表，默认 ["S", "A", "B", "C", "D"]
+            output_path: 输出路径前缀 (不含扩展名)，默认固定文件名
 
         Returns:
             CSV 文件路径
         """
         if levels is None:
-            levels = ["S", "A"]
+            levels = ["S", "A", "B", "C", "D"]
 
         conn = self._get_connection()
         try:
@@ -187,37 +192,51 @@ class ReportGenerator:
         # 处理 list/dict 字段为逗号分隔字符串
         data = [self._flatten_row(row) for row in data]
 
-        base = output_path or os.path.join(self.output_dir, f"leads_{date.today()}")
+        # 固定文件名
+        base = output_path or os.path.join(self.output_dir, "all_rated_companies")
         csv_path = f"{base}.csv"
         xlsx_path = f"{base}.xlsx"
 
-        self.export_csv(data, csv_path)
-        self.export_excel(data, xlsx_path)
+        # 合并已有数据
+        merged = self._merge_with_existing(data, csv_path)
 
-        logger.info(f"线索已导出: {csv_path}, {xlsx_path}")
+        self.export_csv(merged, csv_path)
+        self.export_excel(merged, xlsx_path)
+
+        logger.info(f"线索已导出(合并): {csv_path}, {xlsx_path}, 共{len(merged)}条")
         return csv_path
 
     def _query_leads(self, conn, levels: list) -> list:
-        """查询指定等级的线索数据"""
+        """查询指定等级的线索数据 (含分项分数+爬取时间)
+
+        每个企业只取最高分的一条评级记录 (PostgreSQL DISTINCT ON)
+        """
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT
+                SELECT DISTINCT ON (c.id)
                     c.company_name,
                     c.credit_code,
                     c.registered_capital,
                     c.business_scope,
                     c.industry_tags,
                     c.registered_address,
+                    c.funding_stage,
                     r.total_score,
                     r.rating_level,
+                    r.tech_score,
+                    r.funding_score,
+                    r.intent_score,
+                    r.team_score,
+                    r.industry_score,
                     r.demand_tags,
                     r.sales_pitch,
-                    r.reasoning
+                    r.reasoning,
+                    r.rated_at AS crawl_time
                 FROM ratings r
                 JOIN companies c ON r.company_id = c.id
                 WHERE r.rating_level IN %s
-                ORDER BY r.total_score DESC
+                ORDER BY c.id, r.total_score DESC, r.rated_at DESC
                 """,
                 (tuple(levels),),
             )
@@ -253,6 +272,62 @@ class ReportGenerator:
     # ------------------------------------------------------------------
     # 4. Excel 导出
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # 5. CSV 合并 (按 credit_code 去重覆盖)
+    # ------------------------------------------------------------------
+
+    def _merge_with_existing(self, new_data: list, csv_path: str) -> list:
+        """读取已有CSV，按credit_code合并 — 新数据覆盖旧数据，保留不在新数据中的历史企业
+
+        Args:
+            new_data: 本次从数据库查询并展平后的数据 (dict 列表)
+            csv_path: 已有的CSV文件路径
+
+        Returns:
+            合并后的 dict 列表 (按 total_score 降序)
+        """
+        if not os.path.exists(csv_path):
+            return new_data
+
+        try:
+            existing = []
+            with open(csv_path, "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                existing = list(reader)
+
+            if not existing:
+                return new_data
+
+            # 按 credit_code 建立索引
+            by_code = {}
+            for row in existing:
+                code = row.get("credit_code", "").strip()
+                if code:
+                    by_code[code] = row
+
+            # 新数据覆盖旧数据
+            for row in new_data:
+                code = row.get("credit_code", "").strip()
+                if code:
+                    by_code[code] = row
+                else:
+                    # 无 credit_code 的记录也加入 (用 company_name 去重)
+                    name = row.get("company_name", "")
+                    if name and not any(r.get("company_name") == name for r in by_code.values()):
+                        by_code[f"__name__{name}"] = row
+
+            # 按评分降序
+            merged = list(by_code.values())
+            merged.sort(
+                key=lambda x: int(x.get("total_score") or 0),
+                reverse=True,
+            )
+            return merged
+
+        except Exception as e:
+            logger.warning(f"合并已有CSV失败，使用新数据: {e}")
+            return new_data
 
     def export_excel(self, data: list, output_path: str) -> str:
         """导出数据为 Excel (openpyxl, 格式化表头)
@@ -448,8 +523,8 @@ if __name__ == "__main__":
         choices=["daily", "leads", "notify"],
         help="运行模式: daily(日报), leads(线索导出), notify(新线索通知)",
     )
-    parser.add_argument("--levels", default="S,A", help="线索导出等级，逗号分隔 (默认: S,A)")
-    parser.add_argument("--output", default=None, help="输出文件路径前缀 (leads 模式)")
+    parser.add_argument("--levels", default="S,A,B,C,D", help="线索导出等级，逗号分隔 (默认: S,A,B,C,D)")
+    parser.add_argument("--output", default=None, help="输出文件路径前缀 (leads 模式，默认: all_rated_companies)")
 
     args = parser.parse_args()
 

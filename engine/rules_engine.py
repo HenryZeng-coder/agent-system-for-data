@@ -106,13 +106,13 @@ class RatingRulesEngine:
                 if mode == "incremental":
                     cur.execute(
                         "SELECT id, company_name, capital_amount, business_scope, "
-                        "industry_tags FROM companies WHERE status = %s",
+                        "industry_tags, funding_stage FROM companies WHERE status = %s",
                         ("raw",),
                     )
                 else:  # full
                     cur.execute(
                         "SELECT id, company_name, capital_amount, business_scope, "
-                        "industry_tags FROM companies WHERE status IN (%s, %s)",
+                        "industry_tags, funding_stage FROM companies WHERE status IN (%s, %s)",
                         ("raw", "scored"),
                     )
 
@@ -174,6 +174,7 @@ class RatingRulesEngine:
                     "capital_amount": company.get("capital_amount") or 0,
                     "business_scope": company.get("business_scope") or "",
                     "industry_tags": company.get("industry_tags") or [],
+                    "funding_stage": company.get("funding_stage") or "",
                     "ai_job_ratio": tech_row[0] if tech_row else 0,
                     "cloud_provider": tech_row[1] if tech_row else None,
                     "has_github_org": tech_row[2] if tech_row else False,
