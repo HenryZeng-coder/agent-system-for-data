@@ -1,20 +1,22 @@
-"""招投标爬虫 — 中国政府采购网 (ccgp.gov.cn)
+"""招投标爬虫 — 搜索引擎聚合
 
 采集字段: company_id, company_name, project_name, project_type,
           budget_amount, is_digital, bid_date, source_url, source_name
 
 策略:
-1. 搜索关键词: 武汉 + 信息化/数字化/AI/云计算/大数据
-2. 解析项目列表页和详情页
+1. 使用 WebSearchEngine 搜索 "武汉 信息化 招标/采购" 等关键词
+2. 从搜索结果中提取招标项目信息
 3. 识别数字化项目
 4. 匹配中标企业与 companies 表
 5. yield BiddingItem
+
+注意: ccgp.gov.cn 反爬严格，改用搜索引擎聚合获取招标信息
 """
 
 import re
 import logging
 import psycopg2
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus
 from datetime import datetime, timedelta
 
 import scrapy
@@ -26,16 +28,17 @@ logger = logging.getLogger(__name__)
 
 
 class BiddingSpider(scrapy.Spider):
-    """武汉政府采购招投标采集 Spider"""
+    """武汉政府采购招投标采集 Spider — 搜索引擎聚合"""
 
     name = 'bidding'
-    allowed_domains = ['ccgp.gov.cn', 'search.ccgp.gov.cn']
+    allowed_domains = []
 
     CCGP_SEARCH_URL = 'http://search.ccgp.gov.cn/bxsearch'
 
     SEARCH_KEYWORDS = [
-        '武汉 信息化', '武汉 数字化', '武汉 AI', '武汉 人工智能',
-        '武汉 云计算', '武汉 大数据', '武汉 智慧城市', '武汉 软件开发',
+        '武汉 信息化 招标', '武汉 数字化 采购', '武汉 AI 招标',
+        '武汉 人工智能 采购', '武汉 云计算 招标', '武汉 大数据 采购',
+        '武汉 智慧城市 招标', '武汉 软件开发 采购',
     ]
 
     DIGITAL_KEYWORDS = [
@@ -45,8 +48,8 @@ class BiddingSpider(scrapy.Spider):
     ]
 
     custom_settings = {
-        'CONCURRENT_REQUESTS_PER_DOMAIN': 1,
-        'DOWNLOAD_DELAY': 2.0,
+        'CONCURRENT_REQUESTS': 4,
+        'DOWNLOAD_DELAY': 1.0,
         'DOWNLOAD_TIMEOUT': 30,
         'RETRY_TIMES': 3,
     }
@@ -60,185 +63,171 @@ class BiddingSpider(scrapy.Spider):
             'items_yielded': 0, 'digital_count': 0, 'items_dropped': 0,
         }
 
-        # 在 __init__ 中生成 start_urls
         self._load_companies()
-        self.start_urls = self._generate_start_urls()
 
-    def _generate_start_urls(self):
-        """生成搜索 URL 列表"""
+    async def start(self):
         keywords = [self.keyword_override] if self.keyword_override else self.SEARCH_KEYWORDS
         self.logger.info(f"启动招投标爬虫, 关键词数={len(keywords)}, 已知企业={len(self.companies_map)}")
 
-        urls = []
+        try:
+            import sys
+            sys.path.insert(0, '/Users/henry/Desktop/repository/E-InfoInsigth-agent-codes')
+            from engine.websearch import WebSearchEngine
+            search_engine = WebSearchEngine()
+        except ImportError:
+            from engine.websearch import WebSearchEngine
+            search_engine = WebSearchEngine()
+
         for kw in keywords:
             self.stats['search_requests'] += 1
-            urls.append(
-                f'{self.CCGP_SEARCH_URL}?searchtype=1&bidSort=0&bidType=1&dbselect=bidx'
-                f'&kw={quote_plus(kw)}&start_time={self._date_range_start()}'
-                f'&end_time={datetime.now().strftime("%Y:%m:%d")}&timeType=6&pppStatus=0&agentName='
-                + f'#search_keyword={kw}&page=0'
-            )
-        return urls
+            try:
+                results = search_engine.search(kw, limit=10)
+                for result in results:
+                    title = result.get('title', '')
+                    summary = result.get('summary', '')
+                    url = result.get('url', '')
+                    source = result.get('source', 'unknown')
 
-    def parse(self, response):
-        """统一入口 — 从 URL hash 提取 meta，分发到 parse_list"""
-        fragment = response.url.split('#')[-1] if '#' in response.url else ''
-        meta = {}
-        if fragment:
-            for pair in fragment.split('&'):
-                if '=' in pair:
-                    k, v = pair.split('=', 1)
-                    meta[k] = v
-        response.meta['search_keyword'] = meta.get('search_keyword', '')
-        response.meta['page'] = int(meta.get('page', 0))
-        return self.parse_list(response)
+                    text = f'{title} {summary}'
+
+                    # 从文本中提取项目名
+                    project_name = self._extract_project_name(text)
+                    if not project_name:
+                        continue
+
+                    # 过滤明显不是招标项目的内容
+                    if not self._is_bidding_related(text):
+                        continue
+
+                    is_digital = self._check_digital(text)
+                    budget_amount = self._parse_budget(text)
+                    bid_date = self._extract_date(text)
+                    company_id, company_name = self._match_company(text)
+                    project_type = self._extract_project_type(text)
+
+                    item = BiddingItem()
+                    item['company_id'] = company_id
+                    item['company_name'] = company_name
+                    item['project_name'] = project_name
+                    item['project_type'] = project_type
+                    item['budget_amount'] = budget_amount
+                    item['is_digital'] = is_digital
+                    item['bid_date'] = bid_date
+                    item['source_url'] = url
+                    item['source_name'] = f'websearch_{source}'
+
+                    self.stats['items_yielded'] += 1
+                    if is_digital:
+                        self.stats['digital_count'] += 1
+                    yield item
+
+            except Exception as e:
+                self.logger.error(f"搜索招投标失败: {kw}, error={e}")
+
+        self.logger.info(
+            f"招投标搜索完成: 产出={self.stats['items_yielded']}, "
+            f"数字化={self.stats['digital_count']}"
+        )
+
+        # yield dummy request
+        yield scrapy.Request(url='data:,', callback=self.parse_dummy, dont_filter=True)
+
+    def parse_dummy(self, response):
+        pass
 
     def closed(self, reason):
         self.logger.info(
             f"招投标爬虫结束: 搜索={self.stats['search_requests']}, "
-            f"详情={self.stats['detail_requests']}, 产出={self.stats['items_yielded']}, "
-            f"数字化={self.stats['digital_count']}, 丢弃={self.stats['items_dropped']}"
+            f"产出={self.stats['items_yielded']}, "
+            f"数字化={self.stats['digital_count']}, "
+            f"丢弃={self.stats['items_dropped']}"
         )
 
-    def parse_list(self, response):
-        kw = response.meta['search_keyword']
-        articles = response.css('ul.vT-s-result-list li, div.vT-s-result-list div.vT-z, div.list-box li')
-        if not articles:
-            articles = response.css('div.vT-s-result-list div, ul.vT-z li')
+    # ================================================================
+    # 信息提取
+    # ================================================================
 
-        for article in articles:
-            try:
-                title_el = article.css('a[href], p.vT-s-result-title a')
-                title = (title_el.css('::text').get('') or '').strip()
-                detail_url = title_el.attrib.get('href', '')
-                if detail_url and not detail_url.startswith('http'):
-                    detail_url = urljoin(response.url, detail_url)
-                if not title:
-                    continue
+    def _extract_project_name(self, text):
+        """从文本中提取招标项目名称"""
+        # 常见招标项目模式
+        patterns = [
+            r'([^\s,，。、|/<>"]{5,80}(?:采购|招标|竞争|磋商|询价|谈判)[^\s,，。、|/<>"]{0,40})',
+            r'(项目名称[：:]\s*[^\s,，。]{5,80})',
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, text)
+            if m:
+                name = m.group(1).strip()
+                # 清理
+                name = re.sub(r'^[：:】\]]', '', name)
+                name = re.sub(r'[【\[]', '', name)
+                if 5 < len(name) < 100:
+                    return name
+        # 如果没匹配到模式，返回标题本身（截断）
+        if len(text) > 5:
+            # 截取到第一个标点
+            m = re.match(r'([^\s,，。！？、]{5,80})', text)
+            if m:
+                return m.group(1)
+        return None
 
-                is_digital = self._check_digital(title)
-                budget_text = article.css('.vT-s-result-price, .price, span[class*="money"]::text').get('')
-                budget_amount = self._parse_budget(budget_text or '')
-                date_text = article.css('.vT-s-result-time, .time, span[class*="date"]::text').get('')
-                bid_date = self._extract_date(date_text or '')
-
-                if detail_url:
-                    self.stats['detail_requests'] += 1
-                    yield scrapy.Request(
-                        url=detail_url, callback=self.parse_detail,
-                        meta={'search_keyword': kw, 'project_name': title,
-                              'is_digital': is_digital, 'budget_amount': budget_amount, 'bid_date': bid_date},
-                        errback=self.errback_request,
-                    )
-                else:
-                    item = self._build_item(title, self._extract_project_type(title),
-                                            budget_amount, is_digital, bid_date, response.url)
-                    if item:
-                        self.stats['items_yielded'] += 1
-                        if item.get('is_digital'): self.stats['digital_count'] += 1
-                        yield item
-            except Exception as e:
-                self.logger.debug(f"列表条目解析失败: {e}")
-                self.stats['items_dropped'] += 1
-
-        current_page = response.meta.get('page', 0)
-        if current_page < 4 and articles:
-            next_page = current_page + 1
-            yield scrapy.Request(
-                url=f'{self.CCGP_SEARCH_URL}?searchtype=1&bidSort=0&bidType=1&dbselect=bidx&kw={quote_plus(kw)}&start_time={self._date_range_start()}&end_time={datetime.now().strftime("%Y:%m:%d")}&timeType=6&pppStatus=0&agentName=&pageNo={next_page}',
-                callback=self.parse_list,
-                meta={'search_keyword': kw, 'page': next_page},
-                errback=self.errback_request,
-            )
-
-    def parse_detail(self, response):
-        project_name = response.meta['project_name']
-        is_digital = response.meta['is_digital']
-        budget_amount = response.meta.get('budget_amount')
-        bid_date = response.meta.get('bid_date')
-
-        content = response.css('div.vF-deail-main, div.detail-content, div.vF-detail-content')
-        content_text = ' '.join(content.css('::text').getall())
-
-        if not budget_amount:
-            budget_el = response.css('.vF-deail-budget, .budget, [class*="money"]::text').getall()
-            budget_amount = self._parse_budget(' '.join(budget_el))
-
-        if not bid_date:
-            date_el = response.css('.vF-deail-time, .time, [class*="date"]::text').getall()
-            bid_date = self._extract_date(' '.join(date_el))
-
-        if not is_digital:
-            is_digital = self._check_digital(f'{project_name} {content_text}')
-
-        item = self._build_item(project_name, self._extract_project_type(project_name),
-                                budget_amount, is_digital, bid_date, response.url)
-        if item:
-            self.stats['items_yielded'] += 1
-            if item.get('is_digital'): self.stats['digital_count'] += 1
-            yield item
-
-    def _build_item(self, project_name, project_type, budget_amount, is_digital, bid_date, source_url):
-        project_name = project_name.strip()
-        if not project_name: return None
-        company_id, company_name = self._match_company(project_name)
-
-        item = BiddingItem()
-        item['company_id'] = company_id
-        item['company_name'] = company_name
-        item['project_name'] = project_name
-        item['project_type'] = project_type
-        item['budget_amount'] = budget_amount
-        item['is_digital'] = is_digital
-        item['bid_date'] = bid_date
-        item['source_url'] = source_url
-        item['source_name'] = 'ccgp'
-        return item
+    def _is_bidding_related(self, text):
+        """判断文本是否与招标采购相关"""
+        bidding_words = ['采购', '招标', '竞争', '磋商', '询价', '谈判',
+                         '中标', '成交', '公告', '公示', '预算']
+        return any(kw in text for kw in bidding_words)
 
     def _match_company(self, text):
         for name, cid in self.companies_map.items():
-            if name in text: return cid, name
+            if name in text:
+                return cid, name
         return None, None
 
     def _check_digital(self, text):
         return any(kw in text for kw in self.DIGITAL_KEYWORDS)
 
     def _parse_budget(self, text):
-        if not text: return None
+        if not text:
+            return None
         m = re.search(r'(\d+\.?\d*)\s*万', text)
-        if m: return float(m.group(1))
+        if m:
+            return float(m.group(1))
         m = re.search(r'(\d+\.?\d*)\s*亿', text)
-        if m: return float(m.group(1)) * 10000
+        if m:
+            return float(m.group(1)) * 10000
         m = re.search(r'(\d+\.?\d*)\s*元', text)
-        if m: return float(m.group(1)) / 10000
+        if m:
+            return float(m.group(1)) / 10000
         return None
 
-    def _extract_project_type(self, title):
-        for kw, pt in [('竞争性谈判','竞争性谈判'),('单一来源','单一来源采购'),
-                       ('磋商','竞争性磋商'),('询价','询价采购'),
-                       ('招标','公开招标'),('采购','政府采购')]:
-            if kw in title: return pt
+    def _extract_project_type(self, text):
+        for kw, pt in [('竞争性谈判', '竞争性谈判'), ('单一来源', '单一来源采购'),
+                       ('磋商', '竞争性磋商'), ('询价', '询价采购'),
+                       ('招标', '公开招标'), ('采购', '政府采购')]:
+            if kw in text:
+                return pt
         return '其他'
 
     def _extract_date(self, text):
-        if not text: return None
+        if not text:
+            return None
         for p in [r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})', r'(\d{4}年\d{1,2}月\d{1,2}日)']:
             m = re.search(p, text)
-            if m: return m.group(1).replace('年','-').replace('月','-').replace('日','').replace('/','-')
+            if m:
+                return m.group(1).replace('年', '-').replace('月', '-').replace('日', '').replace('/', '-')
         return None
-
-    def _date_range_start(self):
-        return (datetime.now() - timedelta(days=180)).strftime('%Y:%m:%d')
 
     def _load_companies(self):
         settings = get_project_settings()
         database_url = settings.get('DATABASE_URL')
-        if not database_url: return
+        if not database_url:
+            return
         try:
             conn = psycopg2.connect(database_url)
             with conn.cursor() as cur:
                 cur.execute("SELECT id, company_name FROM companies")
-                for row in cur.fetchall(): self.companies_map[row[1]] = row[0]
+                for row in cur.fetchall():
+                    self.companies_map[row[1]] = row[0]
             conn.close()
             self.logger.info(f"加载企业映射 {len(self.companies_map)} 家")
         except Exception as e:

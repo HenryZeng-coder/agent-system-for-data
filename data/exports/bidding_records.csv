@@ -1,0 +1,2 @@
+id,company_id,project_name,project_type,budget_amount,is_digital,bid_date,source_url,source_name,crawled_at
+1,19,武汉云计算科技有限公司-湖北招标网-中标结果,公开招标,,t,,https://shuju.bidcenter.com.cn/HumanMachineVerification.shtml?url=https://hb.bidcenter.com.cn/gys/detail-4541680.html,websearch_baidu,2026-08-03 11:03:57.656582

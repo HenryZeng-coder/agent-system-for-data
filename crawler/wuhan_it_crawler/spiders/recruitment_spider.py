@@ -1,16 +1,14 @@
-"""招聘信息爬虫 — BOSS直聘 / 拉勾 / 猎聘
+"""招聘信息爬虫 — 搜索引擎聚合
 
 采集字段: company_id, company_name, position_title, salary_range,
           salary_min, salary_max, tech_keywords, headcount, source_url, source_name
 
 策略:
-1. 多源采集: BOSS直聘为主, 拉勾/猎聘为辅
-2. 从数据库 companies 读取企业名称作为搜索关键词
-3. 解析薪资范围提取 salary_min, salary_max
-4. 从岗位描述提取技术关键词
-5. yield RecruitmentItem
+1. 使用 WebSearchEngine 搜索 "[企业名] 招聘 武汉" 获取招聘信息
+2. 从搜索结果中提取岗位名称、薪资、技术关键词
+3. yield RecruitmentItem
 
-注意: BOSS直聘反爬最严，需代理IP轮换+UA随机化+频率控制
+注意: 由于招聘网站反爬严格，改用搜索引擎聚合方式获取公开招聘信息
 """
 
 import re
@@ -27,15 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 class RecruitmentSpider(scrapy.Spider):
-    """武汉IT企业招聘信息采集 Spider"""
+    """武汉IT企业招聘信息采集 Spider — 搜索引擎聚合"""
 
     name = 'recruitment'
-    allowed_domains = ['zhipin.com', 'lagou.com', 'liepin.com']
-
-    # ---- 搜索源 ----
-    BOSS_URL = 'https://www.zhipin.com/web/geek/job'
-    LAGOU_URL = 'https://www.lagou.com/zhaopin'
-    LIEPIN_URL = 'https://www.liepin.com/zhaopin'
+    allowed_domains = []
 
     # ---- 技术关键词库 ----
     TECH_KEYWORDS_LIST = [
@@ -48,22 +41,22 @@ class RecruitmentSpider(scrapy.Spider):
         '算法', '数据挖掘', '数据分析',
     ]
 
+    # ---- 招聘相关关键词 ----
+    JOB_INDICATORS = [
+        '招聘', '招人', '岗位', '职位', '工程师', '开发', '程序员',
+        '薪资', '月薪', '年薪', 'K', '万', '实习',
+    ]
+
     custom_settings = {
-        'CONCURRENT_REQUESTS_PER_DOMAIN': 1,
-        'DOWNLOAD_DELAY': 2.0,  # BOSS直聘反爬严
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 2,
+        'DOWNLOAD_DELAY': 1.0,
         'DOWNLOAD_TIMEOUT': 30,
         'RETRY_TIMES': 3,
     }
 
-    def __init__(self, company=None, source='boss', *args, **kwargs):
-        """
-        Args:
-            company: 可选，指定企业名
-            source: 搜索源 (boss/lagou/liepin/all)
-        """
+    def __init__(self, company=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.company_override = company
-        self.source = source
         self.companies = []
         self.stats = {
             'search_requests': 0,
@@ -71,68 +64,90 @@ class RecruitmentSpider(scrapy.Spider):
             'items_dropped': 0,
         }
 
-        # 在 __init__ 中生成 start_urls
         self._load_companies()
-        self.start_urls = self._generate_start_urls()
 
-    def _generate_start_urls(self):
-        """根据企业列表生成搜索 URL"""
-        urls = []
+    async def start(self):
+        """根据企业列表生成搜索请求"""
         if not self.companies:
             self.logger.warning("未找到企业，跳过")
-            return urls
+            return
 
-        self.logger.info(
-            f"启动招聘爬虫, 企业数={len(self.companies)}, 搜索源={self.source}"
-        )
+        self.logger.info(f"启动招聘爬虫, 企业数={len(self.companies)}")
+
+        # 使用 WebSearchEngine 搜索招聘信息
+        try:
+            from engine.websearch import WebSearchEngine
+            search_engine = WebSearchEngine()
+        except ImportError:
+            import sys
+            sys.path.insert(0, '/Users/henry/Desktop/repository/E-InfoInsigth-agent-codes')
+            from engine.websearch import WebSearchEngine
+            search_engine = WebSearchEngine()
 
         for company in self.companies:
             name = company['company_name']
+            company_id = company['id']
 
-            if self.source in ('boss', 'all'):
-                self.stats['search_requests'] += 1
-                urls.append(
-                    f'{self.BOSS_URL}?query={quote_plus(name)}&city=101200100&experience=&page=1'
-                    + f'#company_id={company["id"]}&company_name={name}&page=1&src=boss'
-                )
+            # 搜索 "武汉 {企业名} 招聘"
+            query = f'武汉 {name} 招聘'
+            self.stats['search_requests'] += 1
 
-            if self.source in ('lagou', 'all'):
-                self.stats['search_requests'] += 1
-                urls.append(
-                    f'{self.LAGOU_URL}/{quote_plus(name)}/?city=%E6%AD%A6%E6%B1%89'
-                    + f'#company_id={company["id"]}&company_name={name}&src=lagou'
-                )
+            try:
+                results = search_engine.search(query, limit=10)
+                for result in results:
+                    title = result.get('title', '')
+                    summary = result.get('summary', '')
+                    url = result.get('url', '')
+                    source = result.get('source', 'unknown')
 
-            if self.source in ('liepin', 'all'):
-                self.stats['search_requests'] += 1
-                urls.append(
-                    f'{self.LIEPIN_URL}?key={quote_plus(name)}&city=410'
-                    + f'#company_id={company["id"]}&company_name={name}&src=liepin'
-                )
+                    # 从标题和摘要中提取岗位信息
+                    text = f'{title} {summary}'
+                    if not self._is_job_related(text):
+                        continue
 
-        return urls
+                    # 提取岗位名称
+                    position_title = self._extract_position_title(text)
+                    if not position_title:
+                        continue
 
-    def parse(self, response):
-        """统一入口 — 根据 URL hash 中的 src 分发"""
-        fragment = response.url.split('#')[-1] if '#' in response.url else ''
-        meta = {}
-        if fragment:
-            for pair in fragment.split('&'):
-                if '=' in pair:
-                    k, v = pair.split('=', 1)
-                    meta[k] = v
+                    # 提取薪资
+                    salary_text = self._extract_salary_text(text)
+                    salary_min, salary_max = self._parse_salary(salary_text)
 
-        src = meta.get('src', 'boss')
-        response.meta['company_id'] = int(meta.get('company_id', 0))
-        response.meta['company_name'] = meta.get('company_name', '')
-        response.meta['page'] = int(meta.get('page', 1))
+                    # 提取技术关键词
+                    tech_keywords = self._extract_tech_keywords(text)
 
-        if src == 'boss':
-            return self.parse_boss(response)
-        elif src == 'lagou':
-            return self.parse_lagou(response)
-        elif src == 'liepin':
-            return self.parse_liepin(response)
+                    item = self._build_item(
+                        company_id=company_id,
+                        company_name=name,
+                        position_title=position_title,
+                        salary_range=salary_text,
+                        salary_min=salary_min,
+                        salary_max=salary_max,
+                        tech_keywords=tech_keywords,
+                        headcount=1,
+                        source_url=url,
+                        source_name=f'websearch_{source}',
+                    )
+                    if item:
+                        self.stats['items_yielded'] += 1
+                        yield item
+
+            except Exception as e:
+                self.logger.error(f"搜索招聘失败: {name}, error={e}")
+
+        self.logger.info(f"招聘搜索完成: 产出={self.stats['items_yielded']}")
+
+        # yield 一个 dummy request 让 spider 不报错
+        yield scrapy.Request(
+            url='data:,',
+            callback=self.parse_dummy,
+            dont_filter=True,
+        )
+
+    def parse_dummy(self, response):
+        """Dummy callback"""
+        pass
 
     def closed(self, reason):
         self.logger.info(
@@ -142,172 +157,46 @@ class RecruitmentSpider(scrapy.Spider):
         )
 
     # ================================================================
-    # BOSS直聘解析
+    # 岗位信息提取
     # ================================================================
 
-    def parse_boss(self, response):
-        """解析BOSS直聘搜索结果"""
-        company_id = response.meta['company_id']
-        company_name = response.meta['company_name']
-        page = response.meta.get('page', 1)
+    def _is_job_related(self, text):
+        """判断文本是否与招聘相关"""
+        return any(kw in text for kw in self.JOB_INDICATORS)
 
-        # BOSS直聘职位列表
-        jobs = response.css('li.job-card-wrapper, div.job-card-left, li[class*="job"]')
+    def _extract_position_title(self, text):
+        """从文本中提取岗位名称"""
+        # 常见 IT 岗位模式
+        job_patterns = [
+            r'((?:高级|资深|初级|中级)?(?:前端|后端|全栈|Java|Python|Go|C\+\+|AI|算法|数据|运维|测试|产品|UI|交互|安全|架构|技术|开发|软件|系统|数据库|网络|云|大数据|人工智能|深度学习|机器学习|NLP|计算机)[^\s,，、|/]{0,20}(?:工程师|开发|专家|经理|主管|负责人|架构师|分析师|设计师|专员))',
+            r'招聘[：:]\s*([^\s,，、|/]{2,30}(?:工程师|开发|专家|经理|主管|架构师|分析师|设计师|专员))',
+            r'([^\s,，、|/]{2,20}(?:工程师|开发|专家|架构师|分析师|设计师|专员))\s*招聘',
+        ]
+        for pattern in job_patterns:
+            m = re.search(pattern, text)
+            if m:
+                title = m.group(1).strip()
+                # 清理标题
+                title = re.sub(r'[【】\[\]()]', '', title)
+                if len(title) > 3 and len(title) < 30:
+                    return title
+        return None
 
-        if not jobs:
-            # 尝试备用选择器
-            jobs = response.css('div.search-job-result li, div.job-list li')
-
-        for job in jobs:
-            try:
-                # 岗位名称
-                title_el = job.css('.job-name, .job-title, span[class*="job-name"]')
-                position_title = (title_el.css('::text').get('') or '').strip()
-
-                # 薪资范围
-                salary_el = job.css('.salary, .job-salary, span[class*="salary"]')
-                salary_text = (salary_el.css('::text').get('') or '').strip()
-                salary_min, salary_max = self._parse_salary(salary_text)
-
-                # 技术关键词 (从岗位描述提取)
-                desc_el = job.css('.job-desc, .job-detail, div[class*="desc"]')
-                desc_text = (desc_el.css('::text').get('') or '').strip()
-                tech_keywords = self._extract_tech_keywords(
-                    f'{position_title} {desc_text}'
-                )
-
-                # 来源URL
-                link_el = job.css('a[href*="job_detail"], a.job-card-left')
-                source_url = link_el.attrib.get('href', '')
-                if source_url and not source_url.startswith('http'):
-                    source_url = f'https://www.zhipin.com{source_url}'
-
-                if not position_title:
-                    continue
-
-                item = self._build_item(
-                    company_id=company_id,
-                    company_name=company_name,
-                    position_title=position_title,
-                    salary_range=salary_text,
-                    salary_min=salary_min,
-                    salary_max=salary_max,
-                    tech_keywords=tech_keywords,
-                    headcount=1,
-                    source_url=source_url,
-                    source_name='boss',
-                )
-                if item:
-                    self.stats['items_yielded'] += 1
-                    yield item
-
-            except Exception as e:
-                self.logger.debug(f"BOSS职位解析失败: {e}")
-                self.stats['items_dropped'] += 1
-
-        # 翻页 (最多3页)
-        if page < 3 and jobs:
-            next_page = page + 1
-            yield scrapy.Request(
-                url=f'{self.BOSS_URL}?query={quote_plus(company_name)}&city=101200100&page={next_page}',
-                callback=self.parse_boss,
-                meta={
-                    'company_id': company_id,
-                    'company_name': company_name,
-                    'page': next_page,
-                },
-                errback=self.errback_request,
-            )
-
-    # ================================================================
-    # 拉勾解析
-    # ================================================================
-
-    def parse_lagou(self, response):
-        """解析拉勾搜索结果"""
-        company_id = response.meta['company_id']
-        company_name = response.meta['company_name']
-
-        jobs = response.css('li.list_item, div.position_list_item, div[class*="item"]')
-
-        for job in jobs:
-            try:
-                position_title = (job.css('.position_name, .p-top a::text, h3::text').get('') or '').strip()
-                salary_text = (job.css('.salary, .money::text, span[class*="salary"]::text').get('') or '').strip()
-                salary_min, salary_max = self._parse_salary(salary_text)
-
-                desc_text = (job.css('.position_desc, .p-bot::text').get('') or '').strip()
-                tech_keywords = self._extract_tech_keywords(f'{position_title} {desc_text}')
-
-                source_url = job.css('a[href]').attrib.get('href', '')
-
-                if not position_title:
-                    continue
-
-                item = self._build_item(
-                    company_id=company_id,
-                    company_name=company_name,
-                    position_title=position_title,
-                    salary_range=salary_text,
-                    salary_min=salary_min,
-                    salary_max=salary_max,
-                    tech_keywords=tech_keywords,
-                    headcount=1,
-                    source_url=source_url,
-                    source_name='lagou',
-                )
-                if item:
-                    self.stats['items_yielded'] += 1
-                    yield item
-
-            except Exception as e:
-                self.logger.debug(f"拉勾职位解析失败: {e}")
-                self.stats['items_dropped'] += 1
-
-    # ================================================================
-    # 猎聘解析
-    # ================================================================
-
-    def parse_liepin(self, response):
-        """解析猎聘搜索结果"""
-        company_id = response.meta['company_id']
-        company_name = response.meta['company_name']
-
-        jobs = response.css('li.so-job-item, div.job-detail-box, div[class*="job-item"]')
-
-        for job in jobs:
-            try:
-                position_title = (job.css('.job-title, .title::text, h3::text').get('') or '').strip()
-                salary_text = (job.css('.job-salary, .text-warning::text').get('') or '').strip()
-                salary_min, salary_max = self._parse_salary(salary_text)
-
-                desc_text = (job.css('.job-labels, .tags::text').get('') or '').strip()
-                tech_keywords = self._extract_tech_keywords(f'{position_title} {desc_text}')
-
-                source_url = job.css('a[href]').attrib.get('href', '')
-
-                if not position_title:
-                    continue
-
-                item = self._build_item(
-                    company_id=company_id,
-                    company_name=company_name,
-                    position_title=position_title,
-                    salary_range=salary_text,
-                    salary_min=salary_min,
-                    salary_max=salary_max,
-                    tech_keywords=tech_keywords,
-                    headcount=1,
-                    source_url=source_url,
-                    source_name='liepin',
-                )
-                if item:
-                    self.stats['items_yielded'] += 1
-                    yield item
-
-            except Exception as e:
-                self.logger.debug(f"猎聘职位解析失败: {e}")
-                self.stats['items_dropped'] += 1
+    def _extract_salary_text(self, text):
+        """从文本中提取薪资文本"""
+        # K格式: "15-30K"
+        m = re.search(r'(\d+[Kk]?[-~—到至]\d+[Kk])', text)
+        if m:
+            return m.group(1)
+        # 万格式: "1.5-3万"
+        m = re.search(r'(\d+\.?\d*[-~—到至]\d+\.?\d*万)', text)
+        if m:
+            return m.group(1)
+        # 纯数字: "8000-15000"
+        m = re.search(r'(\d{4,}[-~—到至]\d{4,})', text)
+        if m:
+            return m.group(1)
+        return None
 
     # ================================================================
     # Item 构建
@@ -339,13 +228,7 @@ class RecruitmentSpider(scrapy.Spider):
     # ================================================================
 
     def _parse_salary(self, text: str):
-        """
-        解析薪资范围文本:
-        - "15-30K" → (15000, 30000)
-        - "8K-12K" → (8000, 12000)
-        - "5-8千" → (5000, 8000)
-        - "年薪20-40万" → (20000, 40000) 月薪估算
-        """
+        """解析薪资范围文本"""
         if not text:
             return None, None
 
@@ -356,7 +239,7 @@ class RecruitmentSpider(scrapy.Spider):
         if k_match:
             return int(k_match.group(1)) * 1000, int(k_match.group(2)) * 1000
 
-        # 千格式: "5-8千" / "5000-8000"
+        # 千格式: "5-8千"
         qian_match = re.search(r'(\d+)[-~—到至](\d+)千', text)
         if qian_match:
             return int(qian_match.group(1)) * 1000, int(qian_match.group(2)) * 1000
@@ -366,8 +249,7 @@ class RecruitmentSpider(scrapy.Spider):
         if num_match:
             low = int(num_match.group(1))
             high = int(num_match.group(2))
-            # 判断是月薪还是年薪
-            if low > 100000:  # 年薪
+            if low > 100000:
                 return round(low / 12), round(high / 12)
             return low, high
 

@@ -9,6 +9,9 @@
 3. GitHub API (https://api.github.com) → 搜索组织名、Stars数
 4. 从 recruitments 表统计 AI岗位占比
 5. yield TechProfileItem
+
+流程:
+start_requests() → parse_website_search() → parse_website() → parse_github_search() → parse_github_repos() → yield TechProfileItem
 """
 
 import re
@@ -29,7 +32,7 @@ class TechSpider(scrapy.Spider):
     """武汉IT企业技术能力采集 Spider"""
 
     name = 'tech'
-    allowed_domains = ['api.github.com', 'www.baidu.com', 'www.bing.com']
+    allowed_domains = []  # 企业官网域名不确定，不过滤
 
     GITHUB_API_URL = 'https://api.github.com'
     BAIDU_URL = 'https://www.baidu.com/s'
@@ -86,17 +89,14 @@ class TechSpider(scrapy.Spider):
             'items_dropped': 0,
         }
 
-        # 在 __init__ 中加载企业并生成 start_urls
         self._load_companies()
         self._setup_github_headers()
-        self.start_urls = self._generate_start_urls()
 
-    def _generate_start_urls(self):
-        """根据企业列表生成搜索 URL"""
-        urls = []
+    async def start(self):
+        """根据企业列表生成搜索请求"""
         if not self.companies:
             self.logger.warning("未找到企业，跳过")
-            return urls
+            return
 
         self.logger.info(f"启动技术能力爬虫, 企业数={len(self.companies)}")
 
@@ -104,36 +104,15 @@ class TechSpider(scrapy.Spider):
             cid = company['id']
             name = company['company_name']
 
-            # 百度搜索企业官网
-            urls.append(
-                f'{self.BAIDU_URL}?wd={quote_plus(name + " 官网")}&rn=5'
-                + f'#company_id={cid}&company_name={name}&step=search'
+            yield scrapy.Request(
+                url=f'{self.BAIDU_URL}?wd={quote_plus(name + " 官网")}&rn=5',
+                callback=self.parse_website_search,
+                meta={
+                    'company_id': cid,
+                    'company_name': name,
+                },
+                errback=self.errback_request,
             )
-
-        return urls
-
-    def parse(self, response):
-        """统一入口 — 从 URL hash 提取 meta，分发到对应解析器"""
-        fragment = response.url.split('#')[-1] if '#' in response.url else ''
-        meta = {}
-        if fragment:
-            for pair in fragment.split('&'):
-                if '=' in pair:
-                    k, v = pair.split('=', 1)
-                    meta[k] = v
-
-        step = meta.get('step', 'search')
-        response.meta['company_id'] = int(meta.get('company_id', 0))
-        response.meta['company_name'] = meta.get('company_name', '')
-
-        if step == 'search':
-            return self.parse_website_search(response)
-        elif step == 'website':
-            return self.parse_website(response)
-        elif step == 'github':
-            return self.parse_github_search(response)
-        elif step == 'github_repos':
-            return self.parse_github_repos(response)
 
     def closed(self, reason):
         self.logger.info(
@@ -153,9 +132,6 @@ class TechSpider(scrapy.Spider):
         company_name = response.meta['company_name']
 
         website_url = None
-        tech_stack = []
-        cloud_provider = None
-        tech_blog_url = None
 
         # 从搜索结果提取官网URL
         for result in response.css('div.result, div.c-container'):
@@ -189,23 +165,26 @@ class TechSpider(scrapy.Spider):
                 dont_filter=True,
             )
         else:
-            # 无法找到官网，用默认值构建 Item
-            self.stats['companies_processed'] += 1
-            item = self._build_item(
-                company_id=company_id,
-                company_name=company_name,
-                tech_stack=[],
-                github_org=None,
-                github_stars=None,
-                tech_blog_url=None,
-                cloud_provider=None,
+            # 无法找到官网，仍然继续 GitHub 搜索
+            short_name = self._shorten_name(company_name)
+            yield scrapy.Request(
+                url=f'{self.GITHUB_API_URL}/search/users?q={quote_plus(short_name)}&per_page=5',
+                callback=self.parse_github_search,
+                headers=self.github_headers,
+                meta={
+                    'company_id': company_id,
+                    'company_name': company_name,
+                    'short_name': short_name,
+                    'tech_stack': [],
+                    'cloud_provider': None,
+                    'tech_blog_url': None,
+                },
+                errback=self.errback_request,
             )
-            if item:
-                self.stats['items_yielded'] += 1
-                yield item
 
     def parse_website(self, response):
-        """解析企业官网，提取技术栈、博客URL、云服务商"""
+        """解析企业官网，提取技术栈、博客URL、云服务商
+        先产出 item（官网数据），然后发起 GitHub 搜索来补充更新"""
         company_id = response.meta['company_id']
         company_name = response.meta['company_name']
 
@@ -220,12 +199,13 @@ class TechSpider(scrapy.Spider):
         # 提取技术博客URL
         tech_blog_url = self._extract_tech_blog(response)
 
+        # 先用官网数据产出 item
         self.stats['companies_processed'] += 1
         item = self._build_item(
             company_id=company_id,
             company_name=company_name,
             tech_stack=tech_stack,
-            github_org=None,  # 由 GitHub 搜索填充
+            github_org=None,
             github_stars=None,
             tech_blog_url=tech_blog_url,
             cloud_provider=cloud_provider,
@@ -233,6 +213,24 @@ class TechSpider(scrapy.Spider):
         if item:
             self.stats['items_yielded'] += 1
             yield item
+
+        # 发起 GitHub 搜索，将官网数据通过 meta 传递
+        short_name = self._shorten_name(company_name)
+        yield scrapy.Request(
+            url=f'{self.GITHUB_API_URL}/search/users?q={quote_plus(short_name)}&per_page=5',
+            callback=self.parse_github_search,
+            headers=self.github_headers,
+            meta={
+                'company_id': company_id,
+                'company_name': company_name,
+                'short_name': short_name,
+                'tech_stack': tech_stack,
+                'cloud_provider': cloud_provider,
+                'tech_blog_url': tech_blog_url,
+            },
+            errback=self.errback_request,
+            dont_filter=True,
+        )
 
     # ================================================================
     # GitHub 搜索解析
@@ -242,7 +240,9 @@ class TechSpider(scrapy.Spider):
         """解析 GitHub API 搜索结果"""
         company_id = response.meta['company_id']
         company_name = response.meta['company_name']
-        short_name = response.meta['short_name']
+        tech_stack = response.meta.get('tech_stack', [])
+        cloud_provider = response.meta.get('cloud_provider')
+        tech_blog_url = response.meta.get('tech_blog_url')
 
         try:
             data = json.loads(response.text)
@@ -253,7 +253,7 @@ class TechSpider(scrapy.Spider):
                 org = items[0]
                 org_login = org.get('login', '')
 
-                # 获取组织详情 (Stars)
+                # 获取组织仓库详情
                 yield scrapy.Request(
                     url=f'{self.GITHUB_API_URL}/users/{org_login}/repos?per_page=100&sort=stars',
                     callback=self.parse_github_repos,
@@ -262,41 +262,70 @@ class TechSpider(scrapy.Spider):
                         'company_id': company_id,
                         'company_name': company_name,
                         'github_org': org_login,
+                        'tech_stack': tech_stack,
+                        'cloud_provider': cloud_provider,
+                        'tech_blog_url': tech_blog_url,
                     },
                     errback=self.errback_request,
                 )
                 self.stats['github_found'] += 1
             else:
+                # GitHub 未找到组织，用官网数据产出 Item
                 self.logger.debug(f"GitHub 未找到组织: {company_name}")
+                self.stats['companies_processed'] += 1
+                item = self._build_item(
+                    company_id=company_id,
+                    company_name=company_name,
+                    tech_stack=tech_stack,
+                    github_org=None,
+                    github_stars=None,
+                    tech_blog_url=tech_blog_url,
+                    cloud_provider=cloud_provider,
+                )
+                if item:
+                    self.stats['items_yielded'] += 1
+                    yield item
 
         except json.JSONDecodeError:
             self.logger.warning(f"GitHub 响应解析失败: {company_name}")
 
     def parse_github_repos(self, response):
-        """解析 GitHub 组织的仓库列表"""
+        """解析 GitHub 组织的仓库列表，合并数据产出 TechProfileItem"""
         company_id = response.meta['company_id']
         company_name = response.meta['company_name']
         github_org = response.meta['github_org']
+        tech_stack = response.meta.get('tech_stack', [])
+        cloud_provider = response.meta.get('cloud_provider')
+        tech_blog_url = response.meta.get('tech_blog_url')
 
         try:
             repos = json.loads(response.text)
             total_stars = sum(r.get('stargazers_count', 0) for r in repos)
 
             # 从 repo 语言分布补充技术栈
-            repo_languages = set()
-            for r in repos:
-                lang = r.get('language')
-                if lang:
-                    repo_languages.add(lang)
+            repo_languages = set(r.get('language') for r in repos if r.get('language'))
 
             self.logger.info(
                 f"GitHub: {github_org}, Stars={total_stars}, "
                 f"Languages={repo_languages}"
             )
 
-            # 注意: 这里不直接 yield，因为官网信息和 GitHub 信息是并行的
-            # 实际场景中应合并到同一个 TechProfileItem
-            # 简化处理: 单独产出一个 GitHub 补充 Item
+            # 合并官网技术栈与 repo 语言
+            tech_stack = list(set(tech_stack) | repo_languages)
+
+            self.stats['companies_processed'] += 1
+            item = self._build_item(
+                company_id=company_id,
+                company_name=company_name,
+                tech_stack=tech_stack,
+                github_org=github_org,
+                github_stars=total_stars,
+                tech_blog_url=tech_blog_url,
+                cloud_provider=cloud_provider,
+            )
+            if item:
+                self.stats['items_yielded'] += 1
+                yield item
 
         except json.JSONDecodeError:
             self.logger.warning(f"GitHub repos 解析失败: {github_org}")
@@ -448,4 +477,25 @@ class TechSpider(scrapy.Spider):
             self.logger.error(f"加载企业列表失败: {e}")
 
     def errback_request(self, failure):
+        """请求错误回调 — 处理 GitHub 搜索失败时仍产出 item"""
         self.logger.error(f"请求失败: {failure.request.url}, error={failure.value}")
+        # 如果是 GitHub 搜索请求失败，仍用官网数据产出 item
+        meta = failure.request.meta
+        if 'tech_stack' in meta or 'company_id' in meta:
+            company_id = meta.get('company_id')
+            company_name = meta.get('company_name', '')
+            # 如果有官网数据，产出 item
+            if company_id and (meta.get('tech_stack') or meta.get('cloud_provider') or meta.get('tech_blog_url')):
+                self.stats['companies_processed'] += 1
+                item = self._build_item(
+                    company_id=company_id,
+                    company_name=company_name,
+                    tech_stack=meta.get('tech_stack', []),
+                    github_org=None,
+                    github_stars=None,
+                    tech_blog_url=meta.get('tech_blog_url'),
+                    cloud_provider=meta.get('cloud_provider'),
+                )
+                if item:
+                    self.stats['items_yielded'] += 1
+                    yield item
