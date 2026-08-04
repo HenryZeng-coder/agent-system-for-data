@@ -38,8 +38,12 @@ transformation_intent:
       - "云"
       - "大模型"
       - "中台"
+      - "数据中台"
+      - "工业互联网"
+      - "智慧"
+      - "信息化"
     score_per_match: 5
-    max_score: 15
+    max_score: 20
     digital_bidding:
       score: 10
 

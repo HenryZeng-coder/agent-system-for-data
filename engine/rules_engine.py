@@ -13,7 +13,7 @@ class RatingRulesEngine:
     def __init__(self, config_path="config/scoring_rules.yaml"):
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
-        self.pass_threshold = 60
+        self.pass_threshold = 50  # B级(50+)即视为数字化转型潜在客户
 
     def score_company(self, company_data: dict) -> dict:
         tech = self._score_tech_investment(company_data)
