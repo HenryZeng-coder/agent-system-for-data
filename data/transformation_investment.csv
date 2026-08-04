@@ -1,0 +1,5 @@
+﻿id,company_id,project_name,investment_amount,investment_type,key_equipment,tech_covered,start_date,end_date
+1,1,数字化工厂建设项目,,产线改造,自动化装配线、机器人、AGV、视觉检测系统等120台套,"数字孪生,AGV,视觉检测",2024-03,
+2,1,三期扩建项目,,产线改造,150台套设备,"5G,数字孪生,人机交互",,
+3,3,智能化车间建设,150000.0,智能工厂,14条生产线、40个车间,"连续制造,MES",,
+4,2,D600智慧工厂,,智能工厂,288台机器人,"数字孪生,AI质检,100%自动化",,
