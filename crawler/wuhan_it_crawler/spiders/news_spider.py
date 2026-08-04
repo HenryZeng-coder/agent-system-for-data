@@ -30,7 +30,7 @@ class NewsSpider(scrapy.Spider):
     """武汉IT企业新闻舆情采集 Spider"""
 
     name = 'news'
-    allowed_domains = ['news.baidu.com', 'news.sogou.com']
+    allowed_domains = ['baidu.com', 'sogou.com']
 
     # ---- 搜索源配置 ----
     BAIDU_NEWS_URL = 'https://news.baidu.com/ns'
@@ -67,74 +67,39 @@ class NewsSpider(scrapy.Spider):
             'items_dropped': 0,
         }
 
-        # 在 __init__ 中加载企业并生成 start_urls
+        # 在 __init__ 中加载企业
         self._load_companies()
-        self.start_urls = self._generate_start_urls()
 
-    def _generate_start_urls(self):
-        """根据企业列表生成搜索 URL"""
-        urls = []
+    async def start(self):
+        """根据企业列表生成搜索请求，直接分发到对应解析器"""
         if not self.companies:
             self.logger.warning("未找到任何企业，跳过新闻采集")
-            return urls
+            return
 
-        self.logger.info(
-            f"启动新闻舆情爬虫, 模式={self.mode}, 企业数={len(self.companies)}"
-        )
+        self.logger.info(f"启动新闻舆情爬虫, 模式={self.mode}, 企业数={len(self.companies)}")
 
         for company in self.companies:
             name = company['company_name']
             keyword = f'武汉 {name}'
+            meta = {'company_id': company['id'], 'company_name': name}
 
             # 百度新闻搜索
             self.stats['search_requests'] += 1
-            urls.append(
-                f'{self.BAIDU_NEWS_URL}?word={quote_plus(keyword)}&tn=news&from=news&cl=2&rn=20'
-                + f'#company_id={company["id"]}&company_name={name}&source=baidu'
+            yield scrapy.Request(
+                url=f'{self.BAIDU_NEWS_URL}?word={quote_plus(keyword)}&tn=news&from=news&cl=2&rn=20',
+                callback=self.parse_baidu,
+                meta=meta,
+                errback=self.errback_request,
             )
 
             # 搜狗新闻搜索
             self.stats['search_requests'] += 1
-            urls.append(
-                f'{self.SOGOU_NEWS_URL}?query={quote_plus(keyword)}&sort=1'
-                + f'#company_id={company["id"]}&company_name={name}&source=sogou'
+            yield scrapy.Request(
+                url=f'{self.SOGOU_NEWS_URL}?query={quote_plus(keyword)}&sort=1',
+                callback=self.parse_sogou,
+                meta=meta,
+                errback=self.errback_request,
             )
-
-        return urls
-
-    def parse(self, response):
-        """统一入口 — 根据URL来源分发到百度或搜狗解析器"""
-        # 从 URL hash 中提取 meta 信息
-        fragment = response.url.split('#')[-1] if '#' in response.url else ''
-        meta = {}
-        if fragment:
-            for pair in fragment.split('&'):
-                if '=' in pair:
-                    k, v = pair.split('=', 1)
-                    meta[k] = v
-
-        company_id = int(meta.get('company_id', 0))
-        company_name = meta.get('company_name', '')
-        source = meta.get('source', '')
-
-        if source == 'baidu':
-            response.meta['company_id'] = company_id
-            response.meta['company_name'] = company_name
-            return self.parse_baidu(response)
-        elif source == 'sogou':
-            response.meta['company_id'] = company_id
-            response.meta['company_name'] = company_name
-            return self.parse_sogou(response)
-        else:
-            # 无 meta 信息时根据 URL 判断
-            if 'baidu.com' in response.url:
-                response.meta['company_id'] = company_id
-                response.meta['company_name'] = company_name
-                return self.parse_baidu(response)
-            elif 'sogou.com' in response.url:
-                response.meta['company_id'] = company_id
-                response.meta['company_name'] = company_name
-                return self.parse_sogou(response)
 
     def closed(self, reason):
         """Spider 关闭时输出统计"""
@@ -153,26 +118,25 @@ class NewsSpider(scrapy.Spider):
         company_id = response.meta['company_id']
         company_name = response.meta['company_name']
 
-        # 百度新闻结果条目
-        articles = response.css('div.result, div.news-item')
-
-        if not articles:
-            # 备用选择器
-            articles = response.css('div[class*="result"]')
+        # 百度新闻结果条目 — 宽泛回退选择器
+        articles = response.css('div.result, div.news-item, div[class*="result"]')
 
         for article in articles:
             try:
                 title_el = article.css('h3 a, .c-title a, a.news-title-font_1xS-F')
-                title = title_el.css('::text').get('')
-                title = title.strip() if title else ''
+                # 使用 getall() + join 处理子元素文本
+                title = ''.join(title_el.css('::text').getall()).strip()
 
                 source_url = title_el.attrib.get('href', '')
 
-                # 摘要
+                # 摘要 — 多级回退
                 summary = article.css('.c-summary, .c-span-last p, .c-abstract::text').get('')
                 if not summary:
                     summary_parts = article.css('.c-summary::text, .c-abstract::text').getall()
                     summary = ''.join(summary_parts).strip()
+                if not summary:
+                    summary_parts = article.css('p::text, span::text').getall()
+                    summary = ''.join(s.strip() for s in summary_parts if s.strip())
 
                 # 来源和时间
                 source_info = article.css('.c-color-gray, .c-gap-right-xsmall::text, .news-source::text').getall()
@@ -209,13 +173,14 @@ class NewsSpider(scrapy.Spider):
         company_id = response.meta['company_id']
         company_name = response.meta['company_name']
 
-        articles = response.css('div.news-list li, div[class*="vrwrap"]')
+        # 搜狗新闻结果条目 — 宽泛回退选择器
+        articles = response.css('div.news-list li, div[class*="vrwrap"], div[class*="result"]')
 
         for article in articles:
             try:
                 title_el = article.css('h3 a, a.news-title, a[href]')
-                title = title_el.css('::text').get('')
-                title = title.strip() if title else ''
+                # 使用 getall() + join 处理子元素文本
+                title = ''.join(title_el.css('::text').getall()).strip()
 
                 source_url = title_el.attrib.get('href', '')
                 if source_url and not source_url.startswith('http'):

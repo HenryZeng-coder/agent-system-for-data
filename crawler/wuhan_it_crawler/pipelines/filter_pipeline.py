@@ -2,6 +2,7 @@
 
 import logging
 from scrapy.exceptions import DropItem
+from wuhan_it_crawler.items import CompanyItem
 
 logger = logging.getLogger(__name__)
 
@@ -12,9 +13,13 @@ IT_KEYWORDS = [
 
 
 class FilterPipeline:
-    """IT行业关键词过滤 — 非IT企业丢弃"""
+    """IT行业关键词过滤 — 仅对 CompanyItem 执行，其他类型直接放行"""
 
     def process_item(self, item, spider):
+        # 只有 CompanyItem 才执行 IT 关键词过滤
+        if not isinstance(item, CompanyItem):
+            return item
+
         scope = item.get('business_scope', '') or ''
         tags = item.get('industry_tags', []) or []
 
