@@ -1,0 +1,90 @@
+# ============================================================
+# 评分规则配置 — 与 rules_engine.py 对应
+# ============================================================
+
+tech_investment:
+  weight: 30
+  rules:
+    ai_job_ratio:
+      threshold: 0.2
+      score: 15
+    cloud_provider:
+      score: 5
+    github_org:
+      score: 5
+    tech_blog:
+      score: 5
+
+funding:
+  weight: 20
+  rules:
+    funding_stage:
+      B: 15
+      C: 15
+      A: 10
+      D: 10
+    registered_capital:
+      threshold: 1000
+      score: 5
+
+transformation_intent:
+  weight: 25
+  rules:
+    news_keywords:
+      - "数字"
+      - "转型"
+      - "AI"
+      - "智能"
+      - "云"
+      - "大模型"
+      - "中台"
+      - "数据中台"
+      - "工业互联网"
+      - "智慧"
+      - "信息化"
+    score_per_match: 5
+    max_score: 20
+    digital_bidding:
+      score: 10
+
+team_size:
+  weight: 15
+  rules:
+    hiring_count:
+      - min: 50
+        score: 15
+      - min: 20
+        score: 10
+      - min: 5
+        score: 5
+      - min: 0
+        score: 0
+
+industry_match:
+  weight: 10
+  rules:
+    high_match_keywords:
+      - "云计算"
+      - "人工智能"
+      - "大数据"
+      - "系统集成"
+      - "软件开发"
+    high_score_per_match: 2
+    low_match_keywords:
+      - "运维"
+      - "硬件"
+      - "网络工程"
+      - "监控"
+    low_score_per_match: -1
+
+it_filter_keywords:
+  - "软件"
+  - "信息技术"
+  - "科技"
+  - "数据"
+  - "互联网"
+  - "云计算"
+  - "人工智能"
+  - "智能"
+  - "IT"
+  - "数字化"
