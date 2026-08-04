@@ -1,0 +1,4 @@
+﻿id,company_id,rnd_count,rnd_ratio,master_phd_ratio,young_ratio,rnd_investment,rnd_investment_ratio,academic_leaders,stat_year
+1,1,200,42.55,,,,,,2025
+2,2,1000,,,,,7.9,,2025
+3,3,358,37.68,59.8,,8612.14,10.15,陈焕春院士、金梅林院士,2025
