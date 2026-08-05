@@ -4,7 +4,7 @@
 - `config/` — 配置文件 (config.yaml, scoring_rules.yaml)
 - `db/` — 数据库DDL和种子数据
 - `crawler/` — Scrapy爬虫 (6个Spider + 5级管道)
-- `engine/` — 规则引擎 + GLM客户端 + 报告生成
+- `engine/` — 规则引擎 + DeepSeek客户端 + 报告生成
 - `skills/` — Hermes Agent Skills (4个)
 - `scripts/` — 运维脚本
 - `tests/` — 单元测试

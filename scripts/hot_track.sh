@@ -12,7 +12,7 @@ cd crawler && scrapy crawl news -a levels=S,A && cd ..
 
 # 2. 重新评级有变化的企业
 echo "🤖 重新评级..."
-python engine/glm_client.py --mode hot_track
+python engine/llm_client.py --mode hot_track
 
 # 3. 生成追踪报告
 echo "📊 追踪报告..."

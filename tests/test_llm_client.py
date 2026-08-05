@@ -1,10 +1,10 @@
 import sys,os
 sys.path.insert(0,os.path.join(os.path.dirname(__file__),".."))
-from engine.glm_client import GLMRatingClient
+from engine.llm_client import LLMRatingClient
 
-class TestGLM:
+class TestLLM:
     def _c(self):
-        c=GLMRatingClient.__new__(GLMRatingClient)
+        c=LLMRatingClient.__new__(LLMRatingClient)
         return c
     def test_valid(self):
         assert self._c()._validate_result({"score":82,"level":"A","demand_tags":["AI"]}) is True

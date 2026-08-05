@@ -14,9 +14,9 @@ cd crawler && scrapy crawl business -s JOBDIR=jobs/incremental && scrapy crawl r
 echo "⚙️ 规则引擎评分..."
 python engine/rules_engine.py --mode incremental
 
-# 3. 增量GLM评级
-echo "🤖 GLM评级..."
-python engine/glm_client.py --mode incremental
+# 3. 增量DeepSeek评级
+echo "🤖 DeepSeek评级..."
+python engine/llm_client.py --mode incremental
 
 # 4. 日报
 echo "📊 生成日报..."

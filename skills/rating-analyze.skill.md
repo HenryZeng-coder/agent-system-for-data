@@ -1,13 +1,13 @@
 ---
 name: rating-analyze
-description: 调用GLM-5.1对高价值企业进行深度评级
+description: 调用DeepSeek对高价值企业进行深度评级
 ---
 
-# GLM-5.1 评级分析
+# DeepSeek 评级分析
 
 ## 流程
-1. 读取 status='scored' 且 total_score>=60 的企业列表
-2. 终端启动 python engine/glm_client.py
+1. 读取 status='scored' 且 total_score>=50 的企业列表
+2. 终端启动 python engine/llm_client.py
 3. 监控 API 调用进度
 4. 检查每批返回的 JSON 结构完整性
 5. 写入 ratings 表
@@ -20,5 +20,5 @@ description: 调用GLM-5.1对高价值企业进行深度评级
 - JSON 格式异常: 降 temperature + few-shot
 
 ## 验证
-- 所有 scored(>=60) 企业都有对应 ratings 记录
+- 所有 scored(>=50) 企业都有对应 ratings 记录
 - level 字段仅在 S/A/B/C/D 中

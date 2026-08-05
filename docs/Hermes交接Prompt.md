@@ -20,7 +20,7 @@
 | 名称 | 武汉IT企业智能评级系统 |
 | 代码库 | `https://ezone.ksyun.com/ezone/E-InfoInsigth-space/E-InfoInsigth-agent-codes.git` |
 | 本地路径 | `/Users/kc/Desktop/E-InfoInsight-agent-codes/` |
-| 技术栈 | Python 3.11 + Scrapy + PostgreSQL 16 + GLM-5.1 (智谱AI) |
+| 技术栈 | Python 3.11 + Scrapy + PostgreSQL 16 + DeepSeek |
 | 分支策略 | `master` (线上) / `test` (开发测试) |
 | 当前分支 | `test` (最新提交: `a601cac`) |
 | Hermes 集成 | 4 个 Skills + 2 个 Cron 作业 |
@@ -35,9 +35,9 @@ E-InfoInsight-agent-codes/
 │   ├── wuhan_it_crawler/spiders/   # 6个Spider: business/tech/recruitment/news/bidding/websearch
 │   ├── wuhan_it_crawler/pipelines/ # 5级管道: dedup→filter→clean→validate→standardize (优先级100→500)
 │   └── utils/                      # 反爬工具: proxy_pool/ua_rotator/captcha_solver/anti_detect
-├── engine/           # 规则引擎 + GLM客户端 + 报告生成 + Prompt模板
+├── engine/           # 规则引擎 + DeepSeek客户端 + 报告生成 + Prompt模板
 │   ├── rules_engine.py    # 5维度加权评分 (tech30/fund20/intent25/team15/ind10)
-│   ├── glm_client.py      # GLM-5.1批量评级 (429自适应退避 + 断点续跑)
+│   ├── llm_client.py      # deepseek-v4-flash批量评级 (429自适应退避 + 断点续跑)
 │   ├── report.py          # 日报Markdown + CSV/Excel线索导出 + 新线索通知
 │   ├── data_pipeline.py   # 数据管道骨架 (当前方法均为pass-through)
 │   ├── websearch.py       # 多引擎搜索聚合 (百度/搜狗/必应)
@@ -45,11 +45,11 @@ E-InfoInsight-agent-codes/
 ├── skills/           # Hermes Agent Skills (4个)
 │   ├── rating-crawl.skill.md      # 爬虫编排
 │   ├── rating-score.skill.md      # 规则引擎评分
-│   ├── rating-analyze.skill.md    # GLM-5.1深度评级
+│   ├── rating-analyze.skill.md    # deepseek-v4-flash深度评级
 │   └ rating-report.skill.md      # 报告与线索导出
 ├── scripts/          # 运维脚本
-│   ├── daily_update.sh   # 每日增量: 爬虫→评分→GLM→日报
-│   ├── full_scan.sh      # 全量重跑: 全量爬虫→全量评分→全量GLM→报告
+│   ├── daily_update.sh   # 每日增量: 爬虫→评分→DeepSeek→日报
+│   ├── full_scan.sh      # 全量重跑: 全量爬虫→全量评分→全量DeepSeek→报告
 │   └ hot_track.sh       # 热点追踪: S/A企业新闻→重评→追踪报告
 ├── tests/            # 单元测试 (pytest, 31个用例, 1个失败)
 ├── docs/             # 开发流程文档
@@ -61,7 +61,7 @@ E-InfoInsight-agent-codes/
 ```
 companies.status: raw → scored → rated → filtered
                  ↑       ↑        ↑        ↑
-            爬虫入库  规则引擎   GLM评级  报告导出
+            爬虫入库  规则引擎   DeepSeek评级  报告导出
 ```
 
 ---
@@ -94,7 +94,7 @@ psql -d rating_system -f db/seed.sql
 # 6. 配置环境变量
 cp .env.example .env
 # 编辑 .env 填入真实值:
-#   GLM_API_KEY=你的智谱AI密钥
+#   DEEPSEEK_API_KEY=你的DeepSeek密钥
 #   DATABASE_URL=postgresql://kc@localhost:5432/rating_system
 #   PROXY_POOL_API=你的代理池API地址
 #   HERMES_WORKDIR=/Users/kc/Desktop/E-InfoInsight-agent-codes
@@ -116,7 +116,7 @@ cd crawler && scrapy list && cd ..
 
 # 验证 Python 模块
 python -c "from engine.rules_engine import RatingRulesEngine; print('OK')"
-python -c "from engine.glm_client import GLMRatingClient; print('OK')"
+python -c "from engine.llm_client import LLMRatingClient; print('OK')"
 python -c "from engine.report import ReportGenerator; print('OK')"
 
 # 运行现有测试
@@ -468,7 +468,7 @@ class TestSpiderNames:
 
 ```bash
 python -m pytest tests/ -v --tb=short
-# 期望: 全部通过 (规则引擎15 + GLM3 + 数据管道7 + Items6 + Pipelines7 + Spider名6 = ~38用例)
+# 期望: 全部通过 (规则引擎15 + DeepSeek3 + 数据管道7 + Items6 + Pipelines7 + Spider名6 = ~38用例)
 ```
 
 ---
@@ -499,7 +499,7 @@ psql -d rating_system -c "SELECT company_name, total_score, rating_level FROM ra
 # 期望: 10家种子企业评分，高分企业>=60分
 ```
 
-### Step 7 — GLM 评级 (需 API Key)
+### Step 7 — DeepSeek评级 (需 API Key)
 
 ```bash
 # 1. 确认 API Key 已配置
@@ -508,54 +508,54 @@ python -c "
 import os
 from dotenv import load_dotenv
 load_dotenv()
-key = os.getenv('GLM_API_KEY', '')
+key = os.getenv('DEEPSEEK_API_KEY', '')
 print('API Key状态:', 'OK (已配置)' if key and not key.startswith('your') else '未配置')
 "
 
-# 2. 如未配置, 先编辑 .env 文件填入真实 GLM_API_KEY
+# 2. 如未配置, 先编辑 .env 文件填入真实 DEEPSEEK_API_KEY
 
-# 3. 获取达标企业并运行 GLM 评级
+# 3. 获取达标企业并运行 DeepSeek评级
 python -c "
 import os, psycopg2
 from dotenv import load_dotenv
 load_dotenv()
 from engine.rules_engine import RatingRulesEngine
 engine = RatingRulesEngine()
-companies = engine.get_companies_for_glm(os.getenv('DATABASE_URL'))
+companies = engine.get_companies_for_llm(os.getenv('DATABASE_URL'))
 print(f'达标企业(>=60分): {len(companies)} 家')
 for c in companies:
     print(f'  {c.get(\"company_name\", \"未知\")}: {c.get(\"total_score\", 0)}分')
 "
 
-# 4. 运行 GLM 客户端
-python engine/glm_client.py
+# 4. 运行 DeepSeek客户端
+python engine/llm_client.py
 # 注意: 当前 __main__ 仅打印就绪信息，需编写完整调用逻辑
 
-# 5. 如需手动调用 GLM (当 __main__ 不含批量逻辑时):
+# 5. 如需手动调用 DeepSeek (当 __main__ 不含批量逻辑时):
 python -c "
 import os, json, psycopg2
 from dotenv import load_dotenv
 load_dotenv()
 from engine.rules_engine import RatingRulesEngine
-from engine.glm_client import GLMRatingClient
+from engine.llm_client import LLMRatingClient
 
 db_url = os.getenv('DATABASE_URL')
 engine = RatingRulesEngine()
-companies = engine.get_companies_for_glm(db_url)
+companies = engine.get_companies_for_llm(db_url)
 
-client = GLMRatingClient(api_key=os.getenv('GLM_API_KEY', ''))
+client = LLMRatingClient(api_key=os.getenv('DEEPSEEK_API_KEY', ''))
 results = client.batch_rate(companies, mode='full')
 
 if results:
     client.update_database(results, db_url)
-    print(f'GLM评级完成: {len(results)} 家')
+    print(f'DeepSeek评级完成: {len(results)} 家')
 else:
-    print('GLM评级无结果 (检查API Key和网络)')
+    print('DeepSeek评级无结果 (检查API Key和网络)')
 "
 
-# 6. 验证 GLM 结果
-psql -d rating_system -c "SELECT count(*) FROM ratings WHERE rated_by='glm'"
-psql -d rating_system -c "SELECT rating_level, count(*) FROM ratings WHERE rated_by='glm' GROUP BY rating_level"
+# 6. 验证 DeepSeek 结果
+psql -d rating_system -c "SELECT count(*) FROM ratings WHERE rated_by='llm'"
+psql -d rating_system -c "SELECT rating_level, count(*) FROM ratings WHERE rated_by='llm' GROUP BY rating_level"
 ```
 
 ### Step 8 — 报告生成
@@ -582,7 +582,7 @@ ls data/reports/
 psql -d rating_system -c "TRUNCATE companies, tech_profiles, recruitments, news_mentions, bidding_records, ratings, crawl_tasks RESTART IDENTITY CASCADE"
 psql -d rating_system -f db/seed.sql
 python engine/rules_engine.py --mode full
-python -c "..."  # GLM评级 (如Step 7)
+python -c "..."  # DeepSeek评级 (如Step 7)
 python engine/report.py --date $(date +%Y-%m-%d)
 
 # 或直接用脚本
@@ -606,7 +606,7 @@ ls skills/
 # Hermes Skill 调用示例:
 hermes skill run rating-crawl    # 执行爬虫编排
 hermes skill run rating-score    # 执行规则引擎评分
-hermes skill run rating-analyze  # 执行 GLM 深度评级
+hermes skill run rating-analyze  # 执行 DeepSeek 深度评级
 hermes skill run rating-report   # 执行报告生成与线索导出
 ```
 
@@ -636,7 +636,7 @@ hermes skill run rating-score
 |-------|----------|----------|
 | `rating-crawl` | `cd crawler && scrapy crawl {spider}` (逐个执行) | 采集数>0, company_name非空率>95% |
 | `rating-score` | `python engine/rules_engine.py --mode {mode}` | status全部='scored', 评分分布合理 |
-| `rating-analyze` | `python engine/glm_client.py` + `client.batch_rate()` | 所有达标企业有ratings记录, level∈S/A/B/C/D |
+| `rating-analyze` | `python engine/llm_client.py` + `client.batch_rate()` | 所有达标企业有ratings记录, level∈S/A/B/C/D |
 | `rating-report` | `python engine/report.py --date {date}` | data/reports/下有md+csv+xlsx文件 |
 
 ---
@@ -727,7 +727,7 @@ git branch -d hotfix/描述
 ### 8.1 环境变量 (.env)
 
 ```bash
-GLM_API_KEY=your_zhipu_api_key_here       # 智谱AI API密钥 (必需)
+DEEPSEEK_API_KEY=your_deepseek_api_key_here       # DeepSeek API密钥 (必需)
 DATABASE_URL=postgresql://kc@localhost:5432/rating_system  # PostgreSQL
 PROXY_POOL_API=http://your-proxy/api      # 代理池 (爬虫需要)
 HERMES_WORKDIR=/Users/kc/Desktop/E-InfoInsight-agent-codes  # 项目路径
@@ -745,14 +745,14 @@ HERMES_WORKDIR=/Users/kc/Desktop/E-InfoInsight-agent-codes  # 项目路径
 
 **通过阈值: 60分** | 等级映射: S(≥80) / A(≥60) / B(≥40) / C(≥20) / D(<20)
 
-### 8.3 GLM 客户端容错机制
+### 8.3 DeepSeek客户端容错机制
 
 | 异常 | 策略 |
 |------|------|
 | 429 TPM限流 | 指数退避 2→4→8→...→120秒, TPM自适应增减延迟 |
 | 5xx 服务端 | 重试3次(间隔5秒), 全部失败跳过该批 |
 | JSON解析失败 | temperature→0.05 + 注入few-shot重试1次 |
-| 中断恢复 | 进度文件 `data/.glm_progress.json` 断点续跑 |
+| 中断恢复 | 进度文件 `data/.llm_progress.json` 断点续跑 |
 
 ### 8.4 Hermes Cron 配置
 
@@ -790,7 +790,7 @@ curl $PROXY_POOL_API
 # 降低频率: config/config.yaml 中 download_delay 调为 1.0, concurrent_requests 调为 4
 ```
 
-### Q4: GLM API 调用失败
+### Q4: DeepSeek API 调用失败
 
 ```bash
 # 检查 API Key
@@ -798,13 +798,13 @@ source .venv/bin/activate && python -c "
 import os, requests
 from dotenv import load_dotenv
 load_dotenv()
-key = os.getenv('GLM_API_KEY', '')
+key = os.getenv('DEEPSEEK_API_KEY', '')
 print('Key状态:', 'OK' if key and not key.startswith('your') else '未配置')
 if key and not key.startswith('your'):
     resp = requests.post(
-        'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        'https://api.deepseek.com/v1/chat/completions',
         headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
-        json={'model':'GLM-5.1','messages':[{'role':'user','content':'hello'}],'max_tokens':10},
+        json={'model':'deepseek-v4-flash','messages':[{'role':'user','content':'hello'}],'max_tokens':10},
         timeout=30
     )
     print(f'API状态: {resp.status_code}')
@@ -840,7 +840,7 @@ head -5 skills/rating-crawl.skill.md
 | **P0** | 完善 DataPipeline 方法 | Step 4 |
 | **P1** | 补充 Spider 测试 | Step 5 |
 | **P1** | 规则引擎联调 | Step 6 |
-| **P1** | GLM 评级联调 | Step 7 |
+| **P1** | DeepSeek评级联调 | Step 7 |
 | **P2** | 报告生成验证 | Step 8 |
 | **P2** | 全链路联调 | Step 9 |
 | **P2** | Hermes Skills 验证 | Step 10-11 |
@@ -863,7 +863,7 @@ python -m pytest tests/ --cov=engine              # 覆盖率
 # === 引擎 ===
 python engine/rules_engine.py --mode full         # 规则引擎全量
 python engine/rules_engine.py --mode incremental  # 规则引擎增量
-python engine/glm_client.py                       # GLM客户端
+python engine/llm_client.py                       # DeepSeek客户端
 python engine/report.py --date 2026-07-27 --mode daily  # 日报
 python engine/report.py --date 2026-07-27 --mode leads  # 线索导出
 python engine/report.py --date 2026-07-27 --mode notify # 通知
@@ -876,7 +876,7 @@ bash scripts/hot_track.sh       # 热点追踪
 # === Hermes ===
 hermes skill run rating-crawl   # 爬虫编排
 hermes skill run rating-score   # 规则引擎评分
-hermes skill run rating-analyze # GLM深度评级
+hermes skill run rating-analyze # DeepSeek深度评级
 hermes skill run rating-report  # 报告导出
 hermes cron list                # 查看定时任务
 

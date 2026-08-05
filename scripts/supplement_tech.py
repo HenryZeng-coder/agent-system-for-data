@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """补充tech_profiles数据 — 通过搜索引擎推断cloud_provider/github_org/tech_blog
 
-kscc调度替代Hermes/Glm进行技术画像补充
+kscc调度替代Hermes/DeepSeek进行技术画像补充
 """
 
 import os

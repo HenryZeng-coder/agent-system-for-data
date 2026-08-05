@@ -1,4 +1,4 @@
-"""GLM-5.1 API 客户端 — 批量评级 + 多层容错 + TPM自适应限流 + 断点续跑
+"""DeepSeek API 客户端 — 批量评级 + 多层容错 + TPM自适应限流 + 断点续跑
 
 核心增强:
 1. 429 TPM 限流: 指数退避 + 最大等待120秒 + TPM自适应降速
@@ -17,8 +17,8 @@ from typing import List, Dict, Optional
 logger = logging.getLogger(__name__)
 
 
-class GLMRatingClient:
-    """GLM-5.1 批量评级客户端"""
+class LLMRatingClient:
+    """DeepSeek 批量评级客户端"""
 
     # 429 限流参数
     MAX_BACKOFF = 120          # 最大退避等待秒数
@@ -29,11 +29,11 @@ class GLMRatingClient:
     TPM_MAX_EXTRA_DELAY = 10   # TPM自适应: 最大额外延迟(秒)
 
     def __init__(self, api_key: str, prompt_template_path: str = "engine/prompts/analysis_prompt.md",
-                 base_url: str = "https://open.bigmodel.cn/api/paas/v4",
-                 model: str = "GLM-5.1", temperature: float = 0.1,
+                 base_url: str = "https://api.deepseek.com/v1",
+                 model: str = "deepseek-v4-flash", temperature: float = 0.1,
                  max_tokens: int = 500, timeout: int = 30,
                  batch_size: int = 5, rate_limit: float = 0.5,
-                 progress_file: str = "data/.glm_progress.json"):
+                 progress_file: str = "data/.llm_progress.json"):
         self.api_key = api_key
         self.base_url = base_url
         self.model = model
@@ -133,7 +133,7 @@ class GLMRatingClient:
             logger.info(f"批次 {batch_num}/{total_batches}: 评级企业 {batch_ids}")
 
             prompt = self._build_batch_prompt(batch)
-            response_text = self._call_glm_with_retry(prompt)
+            response_text = self._call_llm_with_retry(prompt)
 
             if response_text:
                 parsed = self._parse_response(response_text, batch)
@@ -163,11 +163,11 @@ class GLMRatingClient:
         return results
 
     # ================================================================
-    # GLM API 调用 (429增强)
+    # DeepSeek API 调用 (429增强)
     # ================================================================
 
-    def _call_glm(self, prompt: str, retries_5xx: int = 3) -> str:
-        """调用GLM API — 基础版本 (不包含429自动重试)"""
+    def _call_llm(self, prompt: str, retries_5xx: int = 3) -> str:
+        """调用DeepSeek API — 基础版本 (不包含429自动重试)"""
         try:
             resp = requests.post(
                 f"{self.base_url}/chat/completions",
@@ -188,8 +188,8 @@ class GLMRatingClient:
             logger.error(f"API调用异常: {e}")
             return None
 
-    def _call_glm_with_retry(self, prompt: str) -> Optional[str]:
-        """调用GLM API — 429自适应重试 + 指数退避
+    def _call_llm_with_retry(self, prompt: str) -> Optional[str]:
+        """调用DeepSeek API — 429自适应重试 + 指数退避
 
         核心策略:
         1. 遇到429: 指数退避等待，最多重试 MAX_429_RETRIES 次
@@ -201,7 +201,7 @@ class GLMRatingClient:
         retries_5xx = 3
 
         for attempt in range(self.MAX_429_RETRIES + 1):
-            raw_resp = self._call_glm(prompt)
+            raw_resp = self._call_llm(prompt)
 
             # 网络异常
             if raw_resp is None:
@@ -295,7 +295,7 @@ class GLMRatingClient:
     # ================================================================
 
     def _parse_response(self, response: str, batch: List[Dict]) -> List[Dict]:
-        """解析GLM返回的JSON，支持多种格式"""
+        """解析DeepSeek返回的JSON，支持多种格式"""
         # 尝试从markdown代码块中提取JSON
         json_str = response.strip()
         if "```json" in json_str:
@@ -315,7 +315,7 @@ class GLMRatingClient:
                 # 单个结果，包装为列表
                 data = [data]
             results = data if isinstance(data, list) else []
-            # 补充 company_id (GLM可能不返回)
+            # 补充 company_id (DeepSeek可能不返回)
             for i, r in enumerate(results):
                 if "company_id" not in r and i < len(batch):
                     r["company_id"] = batch[i].get("company_id")
@@ -384,7 +384,7 @@ class GLMRatingClient:
                             json.dumps(result.get("demand_tags"), ensure_ascii=False),
                             result.get("sales_pitch"),
                             result.get("reasoning"),
-                            "glm",
+                            "deepseek",
                         ),
                     )
                     success_ids.append(company_id)
@@ -423,5 +423,5 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     import os
     load_dotenv()
-    client = GLMRatingClient(api_key=os.getenv("GLM_API_KEY", ""))
-    print("GLM客户端就绪 (增强版: 429自适应退避 + 断点续跑)")
+    client = LLMRatingClient(api_key=os.getenv("DEEPSEEK_API_KEY", ""))
+    print("DeepSeek客户端就绪 (增强版: 429自适应退避 + 断点续跑)")

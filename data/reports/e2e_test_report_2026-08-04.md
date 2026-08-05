@@ -1,7 +1,7 @@
 # E-InfoInsight 端到端全量测试报告
 
 **日期**: 2026-08-04  
-**调度引擎**: kscc (替代 Hermes/Glm)  
+**调度引擎**: kscc (替代 Hermes/DeepSeek)  
 **测试范围**: 15家武汉IT企业全量爬取 + 评分 + 报告
 
 ---
@@ -15,7 +15,7 @@
 | 招聘信息采集 | ✅ 完成 | 120条 | 搜索推断，8-10条/企业 |
 | 招投标采集 | ⚠️ 偏少 | 8条 | 搜索引擎收录有限 |
 | 规则引擎评分 | ✅ 完成 | 15家 | 4家B级通过(≥50) |
-| GLM深度评级 | ❌ 失败 | 0家 | batch_rate()代码bug |
+| DeepSeek深度评级 | ❌ 失败 | 0家 | batch_rate()代码bug |
 | 报告生成 | ✅ 完成 | 1份 | daily_2026-08-04.md |
 
 ## 二、评分分布
@@ -35,10 +35,10 @@
 
 ### P0 - 阻断级
 
-1. **GLM batch_rate() 代码bug**  
-   - 文件: `engine/glm_client.py:131`  
+1. **DeepSeek batch_rate() 代码bug**  
+   - 文件: `engine/llm_client.py:131`  
    - 问题: `batch_ids = [c.get("company_id") for c in batch]` — batch中的元素是str而非dict  
-   - 影响: GLM深度评级完全无法运行  
+   - 影响: DeepSeek深度评级完全无法运行  
    - 修复建议: 检查batch_rate中数据库查询返回格式，确保每条记录是dict
 
 2. **GitHub API SSL连接失败**  
@@ -98,7 +98,7 @@
 
 ### 短期(1周内)
 
-1. **修复GLM batch_rate bug** — 使深度评级可用
+1. **修复DeepSeek batch_rate bug** — 使深度评级可用
 2. **增加信用代码查询集成** — 将 `/Users/kc/Desktop/project/credit_code_tool/` 集成到business_spider
 3. **配置pip国内镜像** — 解决包安装超时
 

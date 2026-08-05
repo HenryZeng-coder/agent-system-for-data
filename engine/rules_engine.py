@@ -40,7 +40,7 @@ class RatingRulesEngine:
         }
 
     def _calc_data_completeness(self, data: dict) -> dict:
-        """评估各维度数据完整度（供 GLM 深度评级参考）"""
+        """评估各维度数据完整度（供 DeepSeek 深度评级参考）"""
         return {
             "tech": 1.0 if (data.get("cloud_provider") or data.get("ai_job_ratio")) else 0.3,
             "funding": 1.0 if data.get("funding_stage") else 0.5,
@@ -350,8 +350,8 @@ class RatingRulesEngine:
         else:
             return "D"
 
-    def get_companies_for_glm(self, database_url: str) -> list:
-        """获取通过评分阈值的企业列表，供 GLM 深度评级使用
+    def get_companies_for_llm(self, database_url: str) -> list:
+        """获取通过评分阈值的企业列表，供 DeepSeek 深度评级使用
 
         优先从 ratings 表读取分项分数；若无则实时计算。
         返回 status='scored' 且 total_score >= pass_threshold 的企业。
