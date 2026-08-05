@@ -13,7 +13,10 @@ class RatingRulesEngine:
     def __init__(self, config_path="config/scoring_rules.yaml"):
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
-        self.pass_threshold = 50  # B级(50+)即视为数字化转型潜在客户
+        self.level_thresholds = self.config.get("level_thresholds", {
+            "S": 80, "A": 60, "B": 40, "C": 20
+        })
+        self.pass_threshold = self.level_thresholds.get("B", 40)  # B级以上=数字化转型潜在客户
 
     def score_company(self, company_data: dict) -> dict:
         tech = self._score_tech_investment(company_data)
@@ -21,6 +24,10 @@ class RatingRulesEngine:
         intent = self._score_transformation_intent(company_data)
         team = self._score_team_size(company_data)
         industry = self._score_industry_match(company_data)
+
+        # 跨维度加成：技术强 / 大型成熟技术企业 → 转型意向加成
+        intent = self._apply_cross_boost(tech, intent, company_data)
+
         total = min(tech + funding + intent + team + industry, 100)
         return {
             "total_score": total,
@@ -29,21 +36,54 @@ class RatingRulesEngine:
             "intent_score": intent,
             "team_score": team,
             "industry_score": industry,
+            "data_completeness": self._calc_data_completeness(company_data),
+        }
+
+    def _calc_data_completeness(self, data: dict) -> dict:
+        """评估各维度数据完整度（供 GLM 深度评级参考）"""
+        return {
+            "tech": 1.0 if (data.get("cloud_provider") or data.get("ai_job_ratio")) else 0.3,
+            "funding": 1.0 if data.get("funding_stage") else 0.5,
+            "intent": 1.0 if (data.get("recent_news") or data.get("has_digital_bid")) else 0.3,
+            "team": 1.0 if (data.get("hiring_count") or 0) >= 5 else 0.3,
+            "industry": 1.0,
         }
 
     def _score_tech_investment(self, data: dict) -> int:
         score = 0
         rules = self.config.get("tech_investment", {}).get("rules", {})
         ai_rule = rules.get("ai_job_ratio", {})
-        if data.get("ai_job_ratio", 0) > ai_rule.get("threshold", 0.2):
+        threshold = ai_rule.get("threshold", 0.2)
+        comparison = ai_rule.get("comparison", ">=")
+        ai_ratio = data.get("ai_job_ratio", 0)
+        if comparison == ">=" and ai_ratio >= threshold:
             score += ai_rule.get("score", 15)
+        elif comparison == ">" and ai_ratio > threshold:
+            score += ai_rule.get("score", 15)
+
         if data.get("cloud_provider"):
             score += rules.get("cloud_provider", {}).get("score", 5)
         if data.get("has_github_org"):
             score += rules.get("github_org", {}).get("score", 5)
         if data.get("has_tech_blog"):
             score += rules.get("tech_blog", {}).get("score", 5)
+
+        # 经营范围兜底
+        score = self._apply_scope_tech_fallback(data, score)
+
         return min(score, 30)
+
+    def _apply_scope_tech_fallback(self, data: dict, data_driven_score: int) -> int:
+        """数据驱动分低时，用经营范围推断技术投入下限"""
+        fb = self.config.get("tech_investment", {}).get("scope_tech_fallback", {})
+        if not fb.get("enabled"):
+            return data_driven_score
+        scope = data.get("business_scope", "") or ""
+        tech_min = 0
+        for rule in fb.get("rules", []):
+            if any(kw in scope for kw in rule.get("keywords", [])):
+                tech_min = max(tech_min, rule.get("tech_min", 0))
+        return max(data_driven_score, tech_min)
 
     def _score_funding(self, data: dict) -> int:
         score = 0
@@ -55,7 +95,14 @@ class RatingRulesEngine:
         capital_rule = rules.get("registered_capital", {})
         if (data.get("capital_amount") or 0) >= capital_rule.get("threshold", 1000):
             score += capital_rule.get("score", 5)
-        return min(score, 20)
+        # 注册资本梯度加分（取最高匹配档）
+        capital = data.get("capital_amount") or 0
+        for tier in sorted(rules.get("capital_scale", []), key=lambda x: x.get("threshold", 0), reverse=True):
+            if capital >= tier.get("threshold", 0):
+                score += tier.get("score", 0)
+                break
+        cap = self.config.get("funding", {}).get("weight", 25)
+        return min(score, cap)
 
     def _score_transformation_intent(self, data: dict) -> int:
         score = 0
@@ -68,15 +115,53 @@ class RatingRulesEngine:
         score += min(matched * score_per, max_score)
         if data.get("has_digital_bid"):
             score += rules.get("digital_bidding", {}).get("score", 10)
-        return min(score, 25)
+
+        # 经营范围推断转型意向
+        scope_intent_config = self.config.get("transformation_intent", {}).get("scope_intent", {})
+        if scope_intent_config.get("enabled"):
+            scope = data.get("business_scope", "") or ""
+            for rule in scope_intent_config.get("rules", []):
+                if any(kw in scope for kw in rule.get("keywords", [])):
+                    score += rule.get("score", 0)
+
+        cap = self.config.get("transformation_intent", {}).get("weight", 30)
+        return min(score, cap)
+
+    def _apply_cross_boost(self, tech_score: int, intent_score: int, data: dict) -> int:
+        """跨维度加成：技术投入高 / 大型成熟技术企业 → 转型意向加成"""
+        cb = self.config.get("transformation_intent", {}).get("cross_boost", {})
+        # 技术强 → 转型意向高
+        if tech_score >= cb.get("tech_threshold", 25):
+            intent_score += cb.get("intent_bonus", 5)
+        # 大型成熟技术企业有转型需求
+        ctb = cb.get("capital_tech_boost", {})
+        capital = data.get("capital_amount") or 0
+        if (capital >= ctb.get("capital_threshold", 5000)
+                and tech_score >= ctb.get("tech_threshold", 10)):
+            intent_score += ctb.get("intent_bonus", 5)
+        cap = self.config.get("transformation_intent", {}).get("weight", 30)
+        return min(intent_score, cap)
 
     def _score_team_size(self, data: dict) -> int:
         hiring = data.get("hiring_count", 0)
         tiers = self.config.get("team_size", {}).get("rules", {}).get("hiring_count", [])
+        score = 0
         for tier in sorted(tiers, key=lambda x: x.get("min", 0), reverse=True):
             if hiring >= tier.get("min", 0):
-                return tier.get("score", 0)
-        return 0
+                score = tier.get("score", 0)
+                break
+
+        # 招聘数据稀疏时用注册资本推断团队规模下限
+        if hiring < 5:
+            fb = self.config.get("team_size", {}).get("team_fallback", {})
+            if fb.get("enabled"):
+                capital = data.get("capital_amount") or 0
+                for rule in sorted(fb.get("rules", []), key=lambda x: x.get("capital_threshold", 0), reverse=True):
+                    if capital >= rule.get("capital_threshold", 0):
+                        score = max(score, rule.get("team_min", 0))
+                        break
+
+        return min(score, 15)
 
     def _score_industry_match(self, data: dict) -> int:
         score = 0
@@ -251,16 +336,16 @@ class RatingRulesEngine:
             conn.close()
         return stats
 
-    @staticmethod
-    def _score_to_level(score: int) -> str:
-        """总分 -> 评级等级 S/A/B/C/D"""
-        if score >= 80:
+    def _score_to_level(self, score: int) -> str:
+        """总分 -> 评级等级 S/A/B/C/D（配置化阈值）"""
+        t = self.level_thresholds
+        if score >= t.get("S", 80):
             return "S"
-        elif score >= 60:
+        elif score >= t.get("A", 60):
             return "A"
-        elif score >= 40:
+        elif score >= t.get("B", 40):
             return "B"
-        elif score >= 20:
+        elif score >= t.get("C", 20):
             return "C"
         else:
             return "D"
