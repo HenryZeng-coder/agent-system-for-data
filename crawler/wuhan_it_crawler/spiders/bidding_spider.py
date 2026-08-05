@@ -47,6 +47,9 @@ class BiddingSpider(scrapy.Spider):
         '电子政务', '网络安全', '信息技术', '系统集成',
     ]
 
+    # 公司名后缀 — 用于模糊匹配时剥离
+    COMPANY_SUFFIXES = ['股份有限公司', '有限责任公司', '有限公司', '集团']
+
     custom_settings = {
         'CONCURRENT_REQUESTS': 4,
         'DOWNLOAD_DELAY': 1.0,
@@ -178,10 +181,25 @@ class BiddingSpider(scrapy.Spider):
         return any(kw in text for kw in bidding_words)
 
     def _match_company(self, text):
+        """匹配文本中提到的企业 — 精确匹配 + 标准化名模糊匹配"""
+        # 1) 精确全名子串匹配（最高优先）
         for name, cid in self.companies_map.items():
             if name in text:
                 return cid, name
+        # 2) 标准化名子串匹配（去后缀后，最短 4 字符避免误匹配）
+        for name, cid in self.companies_map.items():
+            short = self._normalize_name(name)
+            if len(short) >= 4 and short in text:
+                return cid, name
         return None, None
+
+    @classmethod
+    def _normalize_name(cls, name):
+        """剥离公司名后缀，用于模糊匹配"""
+        for suffix in cls.COMPANY_SUFFIXES:
+            if name.endswith(suffix):
+                return name[:-len(suffix)]
+        return name
 
     def _check_digital(self, text):
         return any(kw in text for kw in self.DIGITAL_KEYWORDS)

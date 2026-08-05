@@ -12,6 +12,10 @@ from wuhan_it_crawler.items import (
 
 logger = logging.getLogger(__name__)
 
+# 数据库字段长度上限 (与 init.sql 的 VARCHAR 定义保持一致)
+MAX_TITLE_LEN = 500          # news_mentions.title
+MAX_PROJECT_NAME_LEN = 500   # bidding_records.project_name
+
 
 class StandardizePipeline:
     """格式标准化: 日期/金额统一 + 设置status='raw' + 写入数据库"""
@@ -279,6 +283,11 @@ class StandardizePipeline:
         item['sentiment_score'] = float(item.get('sentiment_score') or 0.0)
         item['relevance_score'] = float(item.get('relevance_score') or 0.0)
         item['is_digital_related'] = bool(item.get('is_digital_related'))
+        # title 超长截断, 避免 VARCHAR(500) 写入失败
+        title = item.get('title', '') or ''
+        if len(title) > MAX_TITLE_LEN:
+            item['title'] = title[:MAX_TITLE_LEN]
+            logger.debug(f"新闻标题截断: {len(title)} -> {MAX_TITLE_LEN}")
         self._write_news_mention_to_db(item)
         return item
 
@@ -325,14 +334,18 @@ class StandardizePipeline:
         item['is_digital'] = bool(item.get('is_digital'))
         if item.get('bid_date') and isinstance(item['bid_date'], str):
             item['bid_date'] = self._parse_date(item['bid_date'])
+        # project_name 超长截断, 避免 VARCHAR(500) 写入失败
+        project_name = item.get('project_name', '') or ''
+        if len(project_name) > MAX_PROJECT_NAME_LEN:
+            item['project_name'] = project_name[:MAX_PROJECT_NAME_LEN]
+            logger.debug(f"招标项目名截断: {len(project_name)} -> {MAX_PROJECT_NAME_LEN}")
         self._write_bidding_to_db(item)
         return item
 
     def _write_bidding_to_db(self, item):
         company_id = item.get('company_id')
         if not company_id:
-            logger.warning(f"招投标记录缺少 company_id，跳过: {item.get('project_name')}")
-            return
+            logger.warning(f"招投标记录缺少 company_id, 仍写入: {item.get('project_name')}")
         try:
             with self.conn.cursor() as cur:
                 cur.execute("""
