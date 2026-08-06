@@ -39,7 +39,7 @@ def main():
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT c.id, c.company_name, c.credit_code, c.industry_tags, c.business_scope,
+        SELECT c.company_name, c.credit_code, c.industry_tags, c.business_scope,
                rr.total_score AS rules_score, rr.rating_level AS rules_level,
                lr.total_score AS llm_score, lr.rating_level AS llm_level,
                lr.demand_tags, lr.sales_pitch, lr.reasoning,
@@ -70,10 +70,10 @@ def main():
     print(f"\n{'公司名称':<22} {'信用代码':<20} {'规则':>5} {'LLM':>5}")
     print("-" * 60)
     for r in rows:
-        name = r[1] or ""
-        code = r[2] or ""
-        rs = f"{r[5]}{r[6]}" if r[5] is not None else "-"
-        ls = f"{r[7]}{r[8]}" if r[7] is not None else "-"
+        name = r[0] or ""
+        code = r[1] or ""
+        rs = f"{r[4]}{r[5]}" if r[4] is not None else "-"
+        ls = f"{r[6]}{r[7]}" if r[6] is not None else "-"
         print(f"{name:<22} {code:<20} {rs:>5} {ls:>5}")
     print(f"\n总计: {len(rows)} 家")
 
