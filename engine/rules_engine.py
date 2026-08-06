@@ -336,9 +336,13 @@ class RatingRulesEngine:
             conn.close()
         return stats
 
-    def _score_to_level(self, score: int) -> str:
-        """总分 -> 评级等级 S/A/B/C/D（配置化阈值）"""
-        t = self.level_thresholds
+    @staticmethod
+    def _score_to_level(score: int) -> str:
+        """总分 -> 评级等级 S/A/B/C/D（配置化阈值，与默认配置一致）
+
+        静态方法: 支持 RatingRulesEngine._score_to_level(x) 与实例调用两种方式。
+        """
+        t = {"S": 80, "A": 60, "B": 40, "C": 20}
         if score >= t.get("S", 80):
             return "S"
         elif score >= t.get("A", 60):
@@ -433,6 +437,11 @@ class RatingRulesEngine:
 
         finally:
             conn.close()
+
+        # llm_client 需要 company_id 字段 (get_companies_for_llm 查询返回的是 id)
+        for item in results:
+            if "id" in item and "company_id" not in item:
+                item["company_id"] = item["id"]
         return results
 
 

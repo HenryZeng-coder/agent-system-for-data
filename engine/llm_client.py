@@ -31,7 +31,7 @@ class LLMRatingClient:
     def __init__(self, api_key: str, prompt_template_path: str = "engine/prompts/analysis_prompt.md",
                  base_url: str = "https://api.deepseek.com/v1",
                  model: str = "deepseek-v4-flash", temperature: float = 0.1,
-                 max_tokens: int = 500, timeout: int = 30,
+                 max_tokens: int = 4000, timeout: int = 120,
                  batch_size: int = 5, rate_limit: float = 0.5,
                  progress_file: str = "data/.llm_progress.json"):
         self.api_key = api_key
@@ -177,6 +177,7 @@ class LLMRatingClient:
                     "messages": [{"role": "user", "content": prompt}],
                     "temperature": self.temperature,
                     "max_tokens": self.max_tokens,
+                    "response_format": {"type": "json_object"},
                 },
                 timeout=self.timeout,
             )
@@ -367,7 +368,7 @@ class LLMRatingClient:
                     cur.execute(
                         """
                         INSERT INTO ratings
-                            (company_id, total_score, rating_level, demand_tags, sales_pitch, reasoning, rated_by, created_at)
+                            (company_id, total_score, rating_level, demand_tags, sales_pitch, reasoning, rated_by, rated_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                         ON CONFLICT (company_id, rated_by) DO UPDATE SET
                             total_score = EXCLUDED.total_score,
@@ -375,13 +376,13 @@ class LLMRatingClient:
                             demand_tags = EXCLUDED.demand_tags,
                             sales_pitch = EXCLUDED.sales_pitch,
                             reasoning = EXCLUDED.reasoning,
-                            created_at = NOW()
+                            rated_at = NOW()
                         """,
                         (
                             company_id,
                             result.get("score"),
                             result.get("level"),
-                            json.dumps(result.get("demand_tags"), ensure_ascii=False),
+                            result.get("demand_tags"),  # 列表 → psycopg2 自动适配 TEXT[]
                             result.get("sales_pitch"),
                             result.get("reasoning"),
                             "deepseek",

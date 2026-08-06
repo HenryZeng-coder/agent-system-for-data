@@ -14,6 +14,7 @@ CREATE TABLE companies (
     legal_representative VARCHAR(100),
     business_scope  TEXT,
     registered_address TEXT,
+    funding_stage   VARCHAR(20),
     status          VARCHAR(20) DEFAULT 'raw',
     industry_tags   TEXT[],
     source_url      TEXT,
@@ -109,8 +110,9 @@ CREATE TABLE ratings (
     demand_tags     TEXT[],
     sales_pitch     TEXT,
     reasoning       TEXT,
-    rated_by        VARCHAR(20) DEFAULT 'glm',
-    rated_at        TIMESTAMP DEFAULT NOW()
+    rated_by        VARCHAR(20) DEFAULT 'rules_engine',
+    rated_at        TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT uq_ratings_company_rated_by UNIQUE (company_id, rated_by)
 );
 
 CREATE INDEX idx_ratings_level ON ratings(rating_level);

@@ -134,7 +134,14 @@ class TechSpider(scrapy.Spider):
         website_url = None
 
         # 从搜索结果提取官网URL
-        for result in response.css('div.result, div.c-container'):
+        # 百度可能返回反爬非文本响应 (NotSupported)，降级为无官网处理
+        try:
+            search_results = list(response.css('div.result, div.c-container'))
+        except Exception:
+            self.logger.warning(f"百度搜索结果解析失败(可能被反爬): {company_name}")
+            search_results = []
+
+        for result in search_results:
             title_el = result.css('h3 a, .t a')
             url = title_el.attrib.get('href', '')
             title_text = title_el.css('::text').get('')

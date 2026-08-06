@@ -119,7 +119,12 @@ class NewsSpider(scrapy.Spider):
         company_name = response.meta['company_name']
 
         # 百度新闻结果条目 — 宽泛回退选择器
-        articles = response.css('div.result, div.news-item, div[class*="result"]')
+        # 百度可能返回反爬非文本响应 (NotSupported)，降级为无结果
+        try:
+            articles = list(response.css('div.result, div.news-item, div[class*="result"]'))
+        except Exception:
+            self.logger.warning(f"百度新闻响应解析失败(可能被反爬): {company_name}")
+            return
 
         for article in articles:
             try:
@@ -174,7 +179,12 @@ class NewsSpider(scrapy.Spider):
         company_name = response.meta['company_name']
 
         # 搜狗新闻结果条目 — 宽泛回退选择器
-        articles = response.css('div.news-list li, div[class*="vrwrap"], div[class*="result"]')
+        # 搜狗可能返回反爬非文本响应 (NotSupported)，降级为无结果
+        try:
+            articles = list(response.css('div.news-list li, div[class*="vrwrap"], div[class*="result"]'))
+        except Exception:
+            self.logger.warning(f"搜狗新闻响应解析失败(可能被反爬): {company_name}")
+            return
 
         for article in articles:
             try:
