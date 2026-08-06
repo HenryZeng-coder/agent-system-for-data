@@ -22,7 +22,7 @@
 | 本地路径 | `/Users/kc/Desktop/E-InfoInsight-agent-codes/` |
 | 技术栈 | Python 3.11 + Scrapy + PostgreSQL 16 + DeepSeek |
 | 分支策略 | `master` (线上) / `test` (开发测试) |
-| 当前分支 | `test` (最新提交: `a601cac`) |
+| 当前分支 | `test` (最新提交: `3e69f9a`) |
 | Hermes 集成 | 4 个 Skills + 2 个 Cron 作业 |
 
 ### 核心模块
@@ -496,7 +496,7 @@ psql -d rating_system -c "SELECT rating_level, count(*) FROM ratings WHERE rated
 # 期望: 有 S/A/B/C/D 分布
 
 psql -d rating_system -c "SELECT company_name, total_score, rating_level FROM ratings r JOIN companies c ON r.company_id=c.id WHERE r.rated_by='rules_engine' ORDER BY total_score DESC"
-# 期望: 10家种子企业评分，高分企业>=60分
+# 期望: 种子企业评分，达标(>=40分/B级)企业供DeepSeek深度评级
 ```
 
 ### Step 7 — DeepSeek评级 (需 API Key)
@@ -522,7 +522,7 @@ load_dotenv()
 from engine.rules_engine import RatingRulesEngine
 engine = RatingRulesEngine()
 companies = engine.get_companies_for_llm(os.getenv('DATABASE_URL'))
-print(f'达标企业(>=60分): {len(companies)} 家')
+print(f'达标企业(>=40分/B级): {len(companies)} 家')
 for c in companies:
     print(f'  {c.get(\"company_name\", \"未知\")}: {c.get(\"total_score\", 0)}分')
 "
@@ -743,7 +743,7 @@ HERMES_WORKDIR=/Users/kc/Desktop/E-InfoInsight-agent-codes  # 项目路径
 | 团队规模 | 15 | `team_size` | 招聘>50→+15, 20-50→+10, 5-20→+5, <5→+0 |
 | 行业匹配 | 10 | `industry_match` | 高匹配词(云计算/AI/大数据/系统集成/软件开发)→+2/个, 低匹配词(运维/硬件)→-1/个 |
 
-**通过阈值: 60分** | 等级映射: S(≥80) / A(≥60) / B(≥40) / C(≥20) / D(<20)
+**通过阈值: 40分(B级)** | 等级映射: S(≥80) / A(≥60) / B(≥40) / C(≥20) / D(<20)
 
 ### 8.3 DeepSeek客户端容错机制
 
@@ -901,5 +901,5 @@ psql -d rating_system -f db/seed.sql
 ---
 
 *文档生成时间: 2026-07-27*
-*基于代码库最新提交: a601cac*
+*基于代码库最新提交: 3e69f9a*
 *测试状态: 30 passed, 1 failed (test_dedup)*
