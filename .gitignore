@@ -33,3 +33,9 @@ crawler/.scrapy
 # 临时文件
 *.log
 *.tmp
+
+# macOS
+.DS_Store
+
+# 运行时状态
+.llm_progress.json
