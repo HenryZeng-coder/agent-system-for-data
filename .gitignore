@@ -14,6 +14,8 @@ data/rated/
 data/reports/*.csv
 data/reports/*.xlsx
 data/reports/*.md
+# individual.csv 是全链路最终产出, 需入库跟踪
+!data/reports/individual.csv
 
 # Scrapy
 crawler/jobs/
