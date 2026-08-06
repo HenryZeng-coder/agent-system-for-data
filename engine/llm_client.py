@@ -31,8 +31,8 @@ class LLMRatingClient:
     def __init__(self, api_key: str, prompt_template_path: str = "engine/prompts/analysis_prompt.md",
                  base_url: str = "https://api.deepseek.com/v1",
                  model: str = "deepseek-v4-flash", temperature: float = 0.1,
-                 max_tokens: int = 4000, timeout: int = 120,
-                 batch_size: int = 5, rate_limit: float = 0.5,
+                 max_tokens: int = 8000, timeout: int = 120,
+                 batch_size: int = 3, rate_limit: float = 0.5,
                  progress_file: str = "data/.llm_progress.json"):
         self.api_key = api_key
         self.base_url = base_url
