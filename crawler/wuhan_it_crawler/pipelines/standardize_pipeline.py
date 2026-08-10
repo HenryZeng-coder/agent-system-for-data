@@ -256,6 +256,7 @@ class StandardizePipeline:
                         %(salary_min)s, %(salary_max)s, %(tech_keywords)s,
                         %(headcount)s, %(source_url)s, %(source_name)s
                     )
+                    ON CONFLICT (company_id, position_title, source_name) DO NOTHING
                 """, {
                     'company_id': company_id,
                     'position_title': item.get('position_title'),
@@ -308,6 +309,7 @@ class StandardizePipeline:
                         %(source_url)s, %(source_name)s, %(published_at)s,
                         %(sentiment_score)s, %(relevance_score)s, %(is_digital_related)s
                     )
+                    ON CONFLICT (company_id, title, source_name) DO NOTHING
                 """, {
                     'company_id': company_id,
                     'title': item.get('title'),
@@ -358,6 +360,7 @@ class StandardizePipeline:
                         %(budget_amount)s, %(is_digital)s, %(bid_date)s,
                         %(source_url)s, %(source_name)s
                     )
+                    ON CONFLICT (company_id, project_name, source_name) DO NOTHING
                 """, {
                     'company_id': company_id,
                     'project_name': item.get('project_name'),

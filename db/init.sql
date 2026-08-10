@@ -42,6 +42,8 @@ CREATE TABLE tech_profiles (
 );
 
 CREATE INDEX idx_tech_profiles_company_id ON tech_profiles(company_id);
+-- 多机同步: tech_profiles 与公司 1:1, 支撑 ON CONFLICT (company_id) 幂等写入
+ALTER TABLE tech_profiles ADD CONSTRAINT uq_tech_profiles_company UNIQUE (company_id);
 
 -- 3. 招聘信息表
 CREATE TABLE recruitments (
@@ -60,6 +62,9 @@ CREATE TABLE recruitments (
 
 CREATE INDEX idx_recruitments_company_id ON recruitments(company_id);
 CREATE INDEX idx_recruitments_source ON recruitments(source_name);
+-- 多机同步: 业务唯一键, 与 DedupPipeline 去重逻辑一致
+ALTER TABLE recruitments ADD CONSTRAINT uq_recruitments_key
+    UNIQUE (company_id, position_title, source_name);
 
 -- 4. 新闻舆情表
 CREATE TABLE news_mentions (
@@ -78,6 +83,9 @@ CREATE TABLE news_mentions (
 
 CREATE INDEX idx_news_company_id ON news_mentions(company_id);
 CREATE INDEX idx_news_published ON news_mentions(published_at);
+-- 多机同步: 业务唯一键 (标题截断200与DedupPipeline一致, VARCHAR(500)内安全)
+ALTER TABLE news_mentions ADD CONSTRAINT uq_news_key
+    UNIQUE (company_id, title, source_name);
 
 -- 5. 招投标信息表
 CREATE TABLE bidding_records (
@@ -95,6 +103,9 @@ CREATE TABLE bidding_records (
 
 CREATE INDEX idx_bidding_company_id ON bidding_records(company_id);
 CREATE INDEX idx_bidding_digital ON bidding_records(is_digital);
+-- 多机同步: 业务唯一键
+ALTER TABLE bidding_records ADD CONSTRAINT uq_bidding_key
+    UNIQUE (company_id, project_name, source_name);
 
 -- 6. 评级结果表
 CREATE TABLE ratings (
