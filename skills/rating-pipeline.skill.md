@@ -1,7 +1,7 @@
 ---
 name: rating-pipeline
-description: Use when 需要执行武汉IT企业评级系统全链路（全量/增量/热点爬取→评分→DeepSeek评级→报告→多机同步），或排查爬取效率。按脚本调用顺序执行，每次运行写日志并复盘优化。
-version: 1.0.0
+description: Use when 需要执行武汉IT企业评级系统全链路（全量/增量/热点爬取→评分→DeepSeek评级→模型验证→报告→多机同步），或排查爬取效率。按脚本调用顺序执行，每次运行写日志并复盘优化。
+version: 1.1.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -15,9 +15,10 @@ metadata:
 ## Overview
 
 武汉IT企业智能评级系统的端到端流水线：企业清单 → 集成爬取4维度信息 →
-技术画像补强 → 规则引擎评分 → DeepSeek 深度评级 → 报告/individual.csv →
-多机数据同步。**每次运行必须写日志到 logs/，运行后复盘，并把新发现的
-效率优化点更新回本 skill**（本 skill 是可持续进化的运行手册）。
+技术画像补强 → 规则引擎评分 → DeepSeek 深度评级 → **模型评价与验证** →
+报告/individual.csv → 多机数据同步。**每次运行必须写日志到 logs/，运行后
+复盘，并把新发现的效率优化点更新回本 skill**（本 skill 是可持续进化的
+运行手册）。
 
 项目根目录: `/Users/kc/Desktop/E-InfoInsight-agent-codes`
 数据库: PostgreSQL rating_system (DATABASE_URL 环境变量)
@@ -38,6 +39,7 @@ Python: `.venv/bin/activate` 后执行
 | 技术补强 | scripts/supplement_tech.py | KNOWN_TECH 更新 tech_profiles→全量重评分 |
 | DeepSeek评级 | scripts/run_deepseek_rating.py [--mode full\|incremental] | 达标企业→分批评级→写库 |
 | 独立输出 | scripts/export_individual.py | individual.csv (15列, 规则+LLM双评级) |
+| **结果验证** | **scripts/verify_results.py [--limit N]** | **规则校验→模型判定(评分合理性+数据真实性)→verification_<ts>.md** |
 | 每日增量 | scripts/daily_update.sh | business增量→recruitment→news→评分→评级→日报 |
 | 全量脚本 | scripts/full_scan.sh | business→tech→recruitment→news→bidding→评分→评级→报告 |
 | 热点追踪 | scripts/hot_track.sh | news(S,A)→重评(hot_track)→追踪报告 |
@@ -102,14 +104,27 @@ python engine/report.py --date $(date +%Y-%m-%d)   # 日报/线索(可选)
 ```
 完成标准: data/reports/individual.csv 存在且 15 列对齐，llm 列有值。
 
-### Step 8 — 多机同步（如有第二台机器）
+### Step 8 — 模型评价与验证（评分合理性 + 数据真实性）
+```bash
+python scripts/verify_results.py            # 全部企业
+python scripts/verify_results.py --limit 5  # 快速抽查
+```
+- 规则校验（零模型）: 信用代码18位/91前缀、名称与经营范围非空
+- 模型判定（DeepSeek 分批3家）: 每家输出 score_check(合理/偏高/偏低) +
+  data_check(可信/存疑/可疑) + 依据 + 风险点
+- 输出: data/reports/verification_<ts>.md（分布统计 + 明细表 + 需关注企业）
+- **判定解读**: 数据"存疑/可疑"→ 回查爬取源; 评分"偏高/偏低"集中 →
+  校准 scoring_rules.yaml; 两模型等级差异大(如A vs C) → 核查评级标准
+完成标准: 判定完成率 100%（15/15），报告含分布统计；问题企业已记录。
+
+### Step 9 — 多机同步（如有第二台机器）
 ```bash
 # 爬取机: python scripts/export_sync.py && git add data/sync && git commit -m "sync: data" && git push
 # 汇聚机: git pull && python scripts/import_sync.py
 ```
 完成标准: 导入统计行数 = 导出行数，二次导入幂等（行数不变）。
 
-### Step 9 — 日志汇总与复盘
+### Step 10 — 日志汇总与复盘
 - 写 logs/run_<ts>_summary.md：各阶段耗时/采集量/失败点/修复记录
 - **复盘优化**: 对比上次运行（采集量、耗时、失败项），新发现立即以
   patch 方式更新到本 skill 的"效率优化参考"章节，保持手册新鲜
@@ -131,6 +146,12 @@ python engine/report.py --date $(date +%Y-%m-%d)   # 日报/线索(可选)
    代理或出口问题，先 curl 三连测（baidu/github/ezone）再决定重试
 7. **日志先行**: 所有长任务 tee 到 logs/run_<ts>.log，后台跑 +
    notify_on_complete，避免阻塞
+8. **deepseek-v4-flash 是推理模型**: reasoning_content 会吃 max_tokens
+   预算，预算不足时 content 返回空(finish=length)——所有调用必须
+   max_tokens≥8000 且对"200但content空"做重试；批量输出建议 batch≤3
+9. **验证脚本网络波动容错**: verify_results 批次4曾遇 ChunkedEncodingError
+   （响应提前中断），自动重试后成功；长文本响应时网络波动概率上升，
+   遇异常先重试不要改参数
 
 ## Common Pitfalls
 
@@ -146,6 +167,8 @@ python engine/report.py --date $(date +%Y-%m-%d)   # 日报/线索(可选)
    恢复后 git push origin test 即可；勿反复强制操作。
 6. **多机同时爬同一批企业**: 浪费且触发反爬；各机分配不同 spider/
    关键词，或等汇聚机导入后再爬。
+7. **验证脚本 max_tokens 不足**: 若模型判定率 <100%，检查是否为
+   finish=length（reasoning 吃满预算），max_tokens 提到 8000+。
 
 ## Verification Checklist
 
@@ -155,5 +178,7 @@ python engine/report.py --date $(date +%Y-%m-%d)   # 日报/线索(可选)
 - [ ] 规则评分: 全部 scored，达标企业 ≥40 分
 - [ ] DeepSeek: 达标企业全部 rated，level∈S/A/B/C/D
 - [ ] individual.csv 存在、15列对齐、含 llm 评级
+- [ ] 验证报告生成且判定完成率 100%，数据"存疑/可疑"为 0
+- [ ] 评分"偏高/偏低"企业已记录并评估校准需求
 - [ ] logs/run_<ts>_summary.md 已写，复盘结论已回写本 skill
 - [ ] （多机）data/sync 已 push / 已 pull 导入且幂等
