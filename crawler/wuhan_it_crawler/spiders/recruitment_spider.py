@@ -32,13 +32,22 @@ class RecruitmentSpider(scrapy.Spider):
 
     # ---- 技术关键词库 ----
     TECH_KEYWORDS_LIST = [
-        'Python', 'Java', 'Go', 'C++', 'JavaScript', 'TypeScript',
-        'React', 'Vue', 'Angular', 'Spring', 'Django', 'Flask',
+        'Python', 'Java', 'Go', 'C++', 'C#', 'JavaScript', 'TypeScript',
+        'React', 'Vue', 'Angular', 'Spring', 'Django', 'Flask', 'FastAPI',
+        'Node.js', 'PHP', 'Ruby', 'Rust', 'Swift', 'Kotlin',
         'AI', '人工智能', '机器学习', '深度学习', 'NLP', '大模型', 'LLM',
-        '云计算', 'Docker', 'Kubernetes', 'DevOps',
-        '大数据', 'Spark', 'Hadoop', 'Flink',
-        'SQL', 'MySQL', 'Redis', 'MongoDB',
+        '计算机视觉', 'CV', 'AIGC', '生成式', '智能体', 'Agent',
+        '云计算', 'Docker', 'Kubernetes', 'DevOps', '云原生', '容器', 'Serverless',
+        '大数据', 'Spark', 'Hadoop', 'Flink', 'Kafka', '数据中台', '数据仓库',
+        'SQL', 'MySQL', 'Redis', 'MongoDB', 'PostgreSQL', 'Elasticsearch', 'TiDB',
         '算法', '数据挖掘', '数据分析',
+        '物联网', 'IoT', '嵌入式', '边缘计算',
+        '网络安全', '信息安全', '等保', '渗透测试',
+        '信创', '鸿蒙', '麒麟', '国产化', '统信',
+        '区块链', 'Web3', '智能合约',
+        '低代码', '无代码',
+        'Android', 'iOS', 'Flutter', 'React Native', '小程序',
+        '测试', '自动化测试', 'QA', '运维', 'SRE', 'DBA',
     ]
 
     # ---- 招聘相关关键词 ----

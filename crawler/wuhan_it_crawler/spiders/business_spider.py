@@ -12,6 +12,7 @@
 """
 
 import re
+import os
 import logging
 import psycopg2
 from urllib.parse import quote_plus
@@ -56,11 +57,20 @@ class BusinessSpider(scrapy.Spider):
         if self.keyword_override:
             keywords = [f'{self.locations[0]}{self.keyword_override}']
         else:
-            keywords = [
+            # 多查询变体: 提升字段提取率 (信用代码/成立日期/法人/地址)
+            base_keywords = [
                 f'{loc}{ind}'
                 for loc in self.locations
                 for ind in self.industries
             ]
+            query_variants = [
+                '工商信息', '统一社会信用代码', '注册资本 成立日期',
+                '法定代表人 注册地址',
+            ]
+            keywords = []
+            for base in base_keywords:
+                for variant in query_variants:
+                    keywords.append(f'{base} {variant}')
 
         self.logger.info(
             f"启动工商信息爬虫, 模式={self.mode}, 关键词数={len(keywords)}, "
@@ -107,6 +117,7 @@ class BusinessSpider(scrapy.Spider):
                     established_date = self._extract_date(text)
                     legal_representative = self._extract_legal_rep(text)
                     business_scope = self._extract_scope(text)
+                    registered_address = self._extract_address(text)
 
                     # 构建行业标签
                     industry_tags = self._extract_industry_tags(business_scope or kw)
@@ -119,7 +130,7 @@ class BusinessSpider(scrapy.Spider):
                     item['established_date'] = established_date
                     item['legal_representative'] = legal_representative
                     item['business_scope'] = business_scope
-                    item['registered_address'] = None
+                    item['registered_address'] = registered_address
                     item['status'] = 'raw'
                     item['industry_tags'] = industry_tags
                     item['source_url'] = url
@@ -160,7 +171,13 @@ class BusinessSpider(scrapy.Spider):
                 name = m.group(1).strip()
                 # 排除明显的非公司名
                 exclude = ['搜索', '结果', '推荐', '更多', '百度', '搜狗', '必应', '新闻']
-                if not any(e in name for e in exclude):
+                if any(e in name for e in exclude):
+                    continue
+                # 清理名称中的噪声字符 (括号残留/特殊符号)
+                name = re.sub(r'[()（）\[\]【】<>]', '', name)
+                name = re.sub(r'[、，,。|/]', '', name).strip()
+                # 清理后仍保留公司后缀才有效
+                if name.endswith(('有限公司', '股份有限公司', '集团', '工作室', '研究院', '中心')):
                     return name
         return None
 
@@ -191,6 +208,17 @@ class BusinessSpider(scrapy.Spider):
         m = re.search(r'法定代表人[：:为]\s*([^\s,，、]{2,10})', text)
         return m.group(1) if m else None
 
+    def _extract_address(self, text):
+        """提取注册地址 — 优先匹配 注册地址/住所 前缀, 回退到武汉地址模式"""
+        m = re.search(r'(?:注册地址|住所|地址)[：:]\s*([^\s,，。]{6,80})', text)
+        if m:
+            addr = m.group(1).strip()
+            if '武汉' in addr or '湖北' in addr or '市' in addr:
+                return addr
+        # 回退: 匹配 "武汉市...号" 形式的地址片段
+        m = re.search(r'((?:武汉市?|湖北省武汉市?)[^\s,，。]{5,60}?(?:号|路|大道|街|区))', text)
+        return m.group(1) if m else None
+
     def _extract_scope(self, text):
         """提取经营范围"""
         m = re.search(r'经营范围[：:]\s*([^\s]{10,200})', text)
@@ -199,23 +227,54 @@ class BusinessSpider(scrapy.Spider):
         return None
 
     def _extract_industry_tags(self, business_scope: str) -> list:
-        """从经营范围/关键词提取行业标签"""
-        TAG_KEYWORDS = {
-            '人工智能': ['人工智能', 'AI', '机器学习', '深度学习', 'NLP'],
-            '云计算': ['云计算', '云服务', '云原生', 'SaaS', 'PaaS', 'IaaS'],
-            '大数据': ['大数据', '数据分析', '数据挖掘', '数据治理'],
-            '软件开发': ['软件开发', '软件设计', '信息系统', '应用软件', '编程', '开发'],
-            '物联网': ['物联网', 'IoT', '传感器', '嵌入式'],
-            '网络安全': ['网络安全', '信息安全', '等保'],
-            '系统集成': ['系统集成', '信息化建设', '智能化工程'],
-        }
+        """从经营范围/关键词提取行业标签
+
+        优先使用 config/industry_keywords.yaml 的 industry_tags 分类词库,
+        配置缺失时回退到内置 TAG_KEYWORDS。
+        """
+        tag_map = self._load_tag_keywords()
+        if not tag_map:
+            return []
 
         tags = []
-        for tag, keywords in TAG_KEYWORDS.items():
-            if any(kw in business_scope for kw in keywords):
+        for tag, keywords in tag_map.items():
+            if any(kw.lower() in (business_scope or '').lower() for kw in keywords):
                 tags.append(tag)
 
         return tags
+
+    # ---- 行业标签词库: YAML 配置优先, 内置回退 ----
+    TAG_KEYWORDS_FALLBACK = {
+        '人工智能': ['人工智能', 'AI', '机器学习', '深度学习', 'NLP'],
+        '云计算': ['云计算', '云服务', '云原生', 'SaaS', 'PaaS', 'IaaS'],
+        '大数据': ['大数据', '数据分析', '数据挖掘', '数据治理'],
+        '软件开发': ['软件开发', '软件设计', '信息系统', '应用软件', '编程', '开发'],
+        '物联网': ['物联网', 'IoT', '传感器', '嵌入式'],
+        '网络安全': ['网络安全', '信息安全', '等保'],
+        '系统集成': ['系统集成', '信息化建设', '智能化工程'],
+        '信创': ['信创', '国产化', '自主可控', '鸿蒙', '麒麟'],
+        '区块链': ['区块链', '智能合约', 'Web3'],
+        '工业互联网': ['工业互联网', '工业软件', 'MES', '数字孪生', '边缘计算'],
+        '半导体': ['芯片', '集成电路', '半导体', 'IC设计', '光电子', '光纤'],
+        '数字创意': ['数字创意', 'AR', 'VR', '元宇宙', '数字人', '游戏'],
+    }
+
+    def _load_tag_keywords(self) -> dict:
+        """加载行业标签词库: YAML 配置优先, 内置回退"""
+        try:
+            import yaml
+            config_path = os.path.join(
+                os.path.dirname(__file__), '..', '..', '..', 'config', 'industry_keywords.yaml'
+            )
+            if os.path.exists(config_path):
+                with open(config_path, encoding='utf-8') as f:
+                    data = yaml.safe_load(f) or {}
+                tags = data.get('industry_tags')
+                if tags:
+                    return tags
+        except Exception as e:
+            self.logger.warning(f"行业标签词库加载失败({e}), 使用内置回退")
+        return self.TAG_KEYWORDS_FALLBACK
 
     # ================================================================
     # 增量采集: 加载已有 credit_code

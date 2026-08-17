@@ -1,11 +1,11 @@
-"""WebSearch 聚合引擎 — 百度/搜狗/必应
+"""WebSearch 聚合引擎 — 百度/搜狗/必应/360/头条
 
-三引擎并行搜索，单引擎失败自动降级，URL去重+相关度排序。
+五引擎并行搜索，单引擎失败自动降级，URL去重+相关度排序。
 """
 
 import re
 import logging
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus, urljoin, unquote, urlparse, parse_qs
 from datetime import datetime
 
 import requests
@@ -21,6 +21,8 @@ class WebSearchEngine:
     BAIDU_URL = 'https://www.baidu.com/s'
     SOGOU_URL = 'https://www.sogou.com/web'
     BING_URL = 'https://www.bing.com/search'
+    SO360_URL = 'https://www.so.com/s'          # 360搜索
+    TOUTIAO_URL = 'https://so.toutiao.com/search'  # 头条搜索
 
     # 请求超时和重试
     TIMEOUT = 15
@@ -39,10 +41,12 @@ class WebSearchEngine:
             "baidu": self._search_baidu,
             "sogou": self._search_sogou,
             "bing": self._search_bing,
+            "so360": self._search_so360,
+            "toutiao": self._search_toutiao,
         }
 
     def search(self, query: str, limit: int = 20) -> list:
-        """聚合搜索: 三引擎并行，失败降级"""
+        """聚合搜索: 五引擎并行，失败降级"""
         all_results = []
         per_engine_limit = limit // len(self.engines) + 2
 
@@ -197,6 +201,115 @@ class WebSearchEngine:
             raise
 
         return results[:limit]
+
+    # ================================================================
+    # 360搜索
+    # ================================================================
+
+    def _search_so360(self, query: str, limit: int) -> list:
+        """360搜索 (so.com) — 国内份额第三，对中文站点覆盖好"""
+        results = []
+        headers = self._random_headers()
+
+        try:
+            resp = requests.get(
+                f'{self.SO360_URL}?q={quote_plus(query)}&pn=1',
+                headers=headers,
+                timeout=self.TIMEOUT,
+            )
+            resp.raise_for_status()
+
+            soup = BeautifulSoup(resp.text, 'html.parser')
+
+            # 360搜索结果: li.res-list / div.res-list
+            for item in soup.select('li.res-list, div.res-list, li[class*="result"]'):
+                title_el = item.select_one('h3 a, h3.title a')
+                if not title_el:
+                    continue
+                title = title_el.get_text(strip=True)
+                url = title_el.get('href', '')
+
+                summary_el = item.select_one('.res-desc, .res-rich, p')
+                summary = summary_el.get_text(strip=True) if summary_el else ''
+
+                if title:
+                    results.append({
+                        'title': title,
+                        'url': url,
+                        'summary': summary,
+                        'source': 'so360',
+                    })
+
+        except requests.RequestException as e:
+            logger.warning(f"360搜索请求失败: {e}")
+            raise
+
+        return results[:limit]
+
+    # ================================================================
+    # 头条搜索
+    # ================================================================
+
+    def _search_toutiao(self, query: str, limit: int) -> list:
+        """头条搜索 (so.toutiao.com) — 资讯/自媒体内容覆盖好"""
+        results = []
+        headers = self._random_headers()
+
+        try:
+            resp = requests.get(
+                f'{self.TOUTIAO_URL}?dvpf=pc&source=input&keyword={quote_plus(query)}',
+                headers=headers,
+                timeout=self.TIMEOUT,
+            )
+            resp.raise_for_status()
+
+            soup = BeautifulSoup(resp.text, 'html.parser')
+
+            # 头条搜索: 结果条目 a[href*="search/jump"] 为跳转链接, 内含真实URL
+            skip_titles = {'去西瓜搜', '去抖音搜', '查看更多', '下一页', '换一换',
+                           '搜索热词', '大家都在搜', '无障碍'}
+            for item in soup.select('a[href*="search/jump"]'):
+                title = item.get_text(strip=True)
+                if not title or len(title) < 4 or title in skip_titles:
+                    continue
+                jump_url = str(item.get('href', '') or '')
+                real_url = self._resolve_jump_url(jump_url)
+                if not real_url:
+                    continue
+
+                # 摘要: 取父容器内 p 文本
+                summary = ''
+                container = item.find_parent('div')
+                if container:
+                    p_el = container.select_one('p, .summary, .desc')
+                    if p_el:
+                        summary = p_el.get_text(strip=True)
+
+                results.append({
+                    'title': title,
+                    'url': real_url,
+                    'summary': summary,
+                    'source': 'toutiao',
+                })
+
+        except requests.RequestException as e:
+            logger.warning(f"头条搜索请求失败: {e}")
+            raise
+
+        return results[:limit]
+
+    @staticmethod
+    def _resolve_jump_url(jump_url: str) -> str:
+        """解析头条跳转链接 → 真实URL"""
+        try:
+            parsed = urlparse(jump_url)
+            params = parse_qs(parsed.query)
+            real = params.get('url', [''])[0]
+            if real:
+                return unquote(real)
+        except Exception:
+            pass
+        return ''
 
     # ================================================================
     # 去重与排序

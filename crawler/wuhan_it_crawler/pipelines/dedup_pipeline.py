@@ -20,6 +20,7 @@ class DedupPipeline:
         self.conn = None
         # CompanyItem 去重
         self.seen_credit_codes = set()
+        self.seen_company_names = set()  # 无 credit_code 时的名称兜底去重
         # TechProfileItem 去重
         self.seen_tech_company_ids = set()
         # RecruitmentItem 去重
@@ -42,6 +43,10 @@ class DedupPipeline:
             # 加载已有 credit_codes
             cur.execute("SELECT credit_code FROM companies WHERE credit_code IS NOT NULL")
             self.seen_credit_codes = {row[0] for row in cur.fetchall()}
+
+            # 加载已有企业名 (无 credit_code 时的兜底去重)
+            cur.execute("SELECT company_name FROM companies")
+            self.seen_company_names = {row[0] for row in cur.fetchall()}
 
             # 加载已有 tech_profiles
             cur.execute("SELECT company_id FROM tech_profiles")
@@ -78,11 +83,18 @@ class DedupPipeline:
 
     def _dedup_company(self, item):
         credit_code = item.get('credit_code')
+        company_name = item.get('company_name', '')
         if credit_code and credit_code in self.seen_credit_codes:
             logger.debug(f"跳过重复企业: {item.get('company_name')} ({credit_code})")
             raise DropItem(f"重复企业: {credit_code}")
+        # 无 credit_code: 用企业名兜底去重 (名称相同的视为重复)
+        if not credit_code and company_name and company_name in self.seen_company_names:
+            logger.debug(f"跳过同名企业(无信用代码): {company_name}")
+            raise DropItem(f"同名企业: {company_name}")
         if credit_code:
             self.seen_credit_codes.add(credit_code)
+        if company_name:
+            self.seen_company_names.add(company_name)
         return item
 
     def _dedup_tech_profile(self, item):

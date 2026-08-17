@@ -15,6 +15,7 @@ start_requests() → parse_website_search() → parse_website() → parse_github
 """
 
 import re
+import os
 import json
 import logging
 import psycopg2
@@ -35,6 +36,7 @@ class TechSpider(scrapy.Spider):
     allowed_domains = []  # 企业官网域名不确定，不过滤
 
     GITHUB_API_URL = 'https://api.github.com'
+    GITEE_API_URL = 'https://gitee.com/api/v5'   # 码云 — 国内开源补充源
     BAIDU_URL = 'https://www.baidu.com/s'
 
     # ---- 技术栈关键词库 ----
@@ -45,11 +47,25 @@ class TechSpider(scrapy.Spider):
         'Go': ['golang', 'go语言'],
         'C/C++': ['c++', 'c语言', '嵌入式'],
         'JavaScript': ['javascript', 'node.js', 'react', 'vue', 'angular'],
+        'TypeScript': ['typescript', 'ts'],
+        'PHP': ['php', 'laravel'],
+        'Rust': ['rust'],
         # 技术领域
-        'AI/ML': ['人工智能', 'AI', '机器学习', '深度学习', 'NLP', '大模型', 'LLM'],
-        '大数据': ['大数据', 'hadoop', 'spark', 'flink', 'kafka'],
-        '云计算': ['云计算', 'kubernetes', 'docker', '微服务', 'devops'],
-        '数据库': ['mysql', 'postgresql', 'mongodb', 'redis', 'elasticsearch'],
+        'AI/ML': ['人工智能', 'AI', '机器学习', '深度学习', 'NLP', '大模型', 'LLM',
+                  '计算机视觉', 'CV', '自然语言处理', 'AIGC', '生成式'],
+        '大数据': ['大数据', 'hadoop', 'spark', 'flink', 'kafka', '数据中台', '数据仓库'],
+        '云计算': ['云计算', 'kubernetes', 'docker', '微服务', 'devops', '云原生',
+                  '容器', 'serverless'],
+        '数据库': ['mysql', 'postgresql', 'mongodb', 'redis', 'elasticsearch',
+                  'oracle', 'sqlserver', 'tidb', 'oceanbase'],
+        '物联网': ['物联网', 'iot', '传感器', '嵌入式', '边缘计算'],
+        '网络安全': ['网络安全', '信息安全', '等保', '零信任', '防火墙', '漏洞'],
+        '信创': ['信创', '国产化', '自主可控', '鸿蒙', '麒麟', '统信', 'uos',
+                '鲲鹏', '欧拉', '达梦', '人大金仓'],
+        '区块链': ['区块链', '智能合约', 'web3', '数字人民币'],
+        '低代码': ['低代码', '无代码', 'lowcode', '可视化开发'],
+        '工业互联网': ['工业互联网', 'mes', 'erp', 'scada', '数字孪生', '工业软件'],
+        '移动开发': ['android', 'ios', 'flutter', 'react native', '小程序', 'uniapp'],
     }
 
     # ---- 云服务商关键词 ----
@@ -60,6 +76,12 @@ class TechSpider(scrapy.Spider):
         'AWS': ['aws', 'amazon web services'],
         'Azure': ['azure', 'microsoft azure'],
         '百度智能云': ['百度云', '百度智能云'],
+        '天翼云': ['天翼云', 'ctyun'],
+        '移动云': ['移动云', '移动云计算'],
+        '联通云': ['联通云', '沃云'],
+        '火山引擎': ['火山引擎', '火山云'],
+        '京东云': ['京东云', 'jd cloud'],
+        '金山云': ['金山云', 'ksyun'],
     }
 
     # ---- GitHub 搜索模式 ----
@@ -250,6 +272,7 @@ class TechSpider(scrapy.Spider):
         tech_stack = response.meta.get('tech_stack', [])
         cloud_provider = response.meta.get('cloud_provider')
         tech_blog_url = response.meta.get('tech_blog_url')
+        short_name = response.meta.get('short_name') or self._shorten_name(company_name)
 
         try:
             data = json.loads(response.text)
@@ -277,21 +300,26 @@ class TechSpider(scrapy.Spider):
                 )
                 self.stats['github_found'] += 1
             else:
-                # GitHub 未找到组织，用官网数据产出 Item
-                self.logger.debug(f"GitHub 未找到组织: {company_name}")
-                self.stats['companies_processed'] += 1
-                item = self._build_item(
-                    company_id=company_id,
-                    company_name=company_name,
-                    tech_stack=tech_stack,
-                    github_org=None,
-                    github_stars=None,
-                    tech_blog_url=tech_blog_url,
-                    cloud_provider=cloud_provider,
+                # GitHub 未找到组织 → 补充 Gitee (码云) 搜索
+                self.logger.debug(f"GitHub 未找到组织, 尝试 Gitee: {company_name}")
+                gitee_headers = {'Accept': 'application/json'}
+                gitee_token = os.getenv('GITEE_TOKEN', '')
+                if gitee_token:
+                    gitee_headers['Authorization'] = f'token {gitee_token}'
+                yield scrapy.Request(
+                    url=f'{self.GITEE_API_URL}/search/repositories'
+                        f'?q={quote_plus(short_name)}&per_page=5',
+                    callback=self.parse_gitee_search,
+                    headers=gitee_headers,
+                    meta={
+                        'company_id': company_id,
+                        'company_name': company_name,
+                        'tech_stack': tech_stack,
+                        'cloud_provider': cloud_provider,
+                        'tech_blog_url': tech_blog_url,
+                    },
+                    errback=self.errback_request,
                 )
-                if item:
-                    self.stats['items_yielded'] += 1
-                    yield item
 
         except json.JSONDecodeError:
             self.logger.warning(f"GitHub 响应解析失败: {company_name}")
@@ -336,6 +364,75 @@ class TechSpider(scrapy.Spider):
 
         except json.JSONDecodeError:
             self.logger.warning(f"GitHub repos 解析失败: {github_org}")
+
+    # ================================================================
+    # Gitee 搜索解析 (国内开源补充源)
+    # ================================================================
+
+    def parse_gitee_search(self, response):
+        """解析 Gitee API 搜索结果 — GitHub 未命中时的国内补充"""
+        company_id = response.meta['company_id']
+        company_name = response.meta['company_name']
+        tech_stack = response.meta.get('tech_stack', [])
+        cloud_provider = response.meta.get('cloud_provider')
+        tech_blog_url = response.meta.get('tech_blog_url')
+
+        try:
+            data = json.loads(response.text)
+            repos = data.get('repositories', []) if isinstance(data, dict) else data
+
+            if repos:
+                # 取第一个仓库，聚合 stars 与语言
+                total_stars = sum(
+                    r.get('stargazers_count', 0) or r.get('stars_count', 0)
+                    for r in repos
+                )
+                repo_languages = set(
+                    r.get('language') for r in repos if r.get('language')
+                )
+                org_login = repos[0].get('owner', {}).get('login') or repos[0].get('full_name', '').split('/')[0]
+
+                # 合并官网技术栈与 repo 语言
+                tech_stack = list(set(tech_stack) | repo_languages)
+
+                self.logger.info(
+                    f"Gitee: {org_login}, Stars={total_stars}, Languages={repo_languages}"
+                )
+                github_org = f'gitee:{org_login}'
+            else:
+                github_org = None
+                total_stars = None
+
+            self.stats['companies_processed'] += 1
+            item = self._build_item(
+                company_id=company_id,
+                company_name=company_name,
+                tech_stack=tech_stack,
+                github_org=github_org,
+                github_stars=total_stars,
+                tech_blog_url=tech_blog_url,
+                cloud_provider=cloud_provider,
+            )
+            if item:
+                self.stats['items_yielded'] += 1
+                yield item
+
+        except json.JSONDecodeError:
+            self.logger.warning(f"Gitee 响应解析失败: {company_name}")
+            # 降级: 用官网数据产出 item
+            self.stats['companies_processed'] += 1
+            item = self._build_item(
+                company_id=company_id,
+                company_name=company_name,
+                tech_stack=tech_stack,
+                github_org=None,
+                github_stars=None,
+                tech_blog_url=tech_blog_url,
+                cloud_provider=cloud_provider,
+            )
+            if item:
+                self.stats['items_yielded'] += 1
+                yield item
 
     # ================================================================
     # Item 构建

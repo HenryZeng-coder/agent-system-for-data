@@ -35,6 +35,8 @@ class NewsSpider(scrapy.Spider):
     # ---- 搜索源配置 ----
     BAIDU_NEWS_URL = 'https://news.baidu.com/ns'
     SOGOU_NEWS_URL = 'https://news.sogou.com/news'
+    BING_NEWS_URL = 'https://www.bing.com/news/search'   # 必应新闻
+    S360_NEWS_URL = 'https://news.so.com/ns'             # 360新闻
 
     # ---- 情感分析词库 ----
     POSITIVE_WORDS = ['获融', '融资', '发布', '创新', '突破', '领先', '增长', '签约', '合作', '上市', '获奖', '认可', '完成', '提升']
@@ -97,6 +99,24 @@ class NewsSpider(scrapy.Spider):
             yield scrapy.Request(
                 url=f'{self.SOGOU_NEWS_URL}?query={quote_plus(keyword)}&sort=1',
                 callback=self.parse_sogou,
+                meta=meta,
+                errback=self.errback_request,
+            )
+
+            # 必应新闻搜索
+            self.stats['search_requests'] += 1
+            yield scrapy.Request(
+                url=f'{self.BING_NEWS_URL}?q={quote_plus(keyword)}&qft=interval%3d%228%22',
+                callback=self.parse_bing_news,
+                meta=meta,
+                errback=self.errback_request,
+            )
+
+            # 360新闻搜索
+            self.stats['search_requests'] += 1
+            yield scrapy.Request(
+                url=f'{self.S360_NEWS_URL}?q={quote_plus(keyword)}',
+                callback=self.parse_s360_news,
                 meta=meta,
                 errback=self.errback_request,
             )
@@ -224,6 +244,119 @@ class NewsSpider(scrapy.Spider):
 
             except Exception as e:
                 self.logger.debug(f"搜狗新闻条目解析失败: {e}")
+                self.stats['items_dropped'] += 1
+
+    # ================================================================
+    # 必应新闻解析
+    # ================================================================
+
+    def parse_bing_news(self, response):
+        """解析必应新闻搜索结果"""
+        company_id = response.meta['company_id']
+        company_name = response.meta['company_name']
+
+        # 必应新闻结果条目 — 宽泛回退选择器
+        try:
+            articles = list(response.css('div.news-card, div.newsitem, div[class*="news"]'))
+        except Exception:
+            self.logger.warning(f"必应新闻响应解析失败(可能被反爬): {company_name}")
+            return
+
+        for article in articles:
+            try:
+                title_el = article.css('a.title, h2 a, a[class*="title"]')
+                title = ''.join(title_el.css('::text').getall()).strip()
+
+                source_url = title_el.attrib.get('href', '')
+                if source_url and not source_url.startswith('http'):
+                    source_url = f'https://www.bing.com{source_url}'
+
+                # 摘要
+                summary = article.css('.snippet, .news-summary, p::text').get('')
+                if not summary:
+                    summary_parts = article.css('.snippet::text, p::text').getall()
+                    summary = ''.join(s.strip() for s in summary_parts if s.strip())
+
+                # 来源和时间
+                source_text = ' '.join(
+                    s.strip() for s in article.css('.source, .news-source, span::text').getall()
+                    if s.strip()
+                )
+                published_at = self._extract_date(source_text)
+
+                if not title:
+                    continue
+
+                item = self._build_item(
+                    company_id=company_id,
+                    company_name=company_name,
+                    title=title,
+                    summary=summary,
+                    source_url=source_url,
+                    source_name='bing_news',
+                    published_at=published_at,
+                )
+                if item:
+                    self.stats['items_yielded'] += 1
+                    yield item
+
+            except Exception as e:
+                self.logger.debug(f"必应新闻条目解析失败: {e}")
+                self.stats['items_dropped'] += 1
+
+    # ================================================================
+    # 360新闻解析
+    # ================================================================
+
+    def parse_s360_news(self, response):
+        """解析360新闻搜索结果"""
+        company_id = response.meta['company_id']
+        company_name = response.meta['company_name']
+
+        # 360新闻结果条目
+        try:
+            articles = list(response.css('div.news-item, li[class*="news"], div[class*="result"]'))
+        except Exception:
+            self.logger.warning(f"360新闻响应解析失败(可能被反爬): {company_name}")
+            return
+
+        for article in articles:
+            try:
+                title_el = article.css('h3 a, a[class*="title"], a[href]')
+                title = ''.join(title_el.css('::text').getall()).strip()
+
+                source_url = title_el.attrib.get('href', '')
+                if source_url and not source_url.startswith('http'):
+                    source_url = f'https://news.so.com{source_url}'
+
+                # 摘要
+                summary = article.css('.news-desc, .summary, p::text').get('')
+                if not summary:
+                    summary_parts = article.css('.news-desc::text, p::text').getall()
+                    summary = ''.join(s.strip() for s in summary_parts if s.strip())
+
+                # 时间
+                time_text = article.css('.news-time, .time, .src-time::text').get('')
+                published_at = self._extract_date(time_text or '')
+
+                if not title:
+                    continue
+
+                item = self._build_item(
+                    company_id=company_id,
+                    company_name=company_name,
+                    title=title,
+                    summary=summary,
+                    source_url=source_url,
+                    source_name='so360_news',
+                    published_at=published_at,
+                )
+                if item:
+                    self.stats['items_yielded'] += 1
+                    yield item
+
+            except Exception as e:
+                self.logger.debug(f"360新闻条目解析失败: {e}")
                 self.stats['items_dropped'] += 1
 
     # ================================================================

@@ -39,6 +39,21 @@ class BiddingSpider(scrapy.Spider):
         '武汉 信息化 招标', '武汉 数字化 采购', '武汉 AI 招标',
         '武汉 人工智能 采购', '武汉 云计算 招标', '武汉 大数据 采购',
         '武汉 智慧城市 招标', '武汉 软件开发 采购',
+        # 武汉本地招投标平台定向源
+        '武汉市公共资源交易中心 招标', '湖北政府采购网 武汉 采购',
+        '武汉 政务云 中标', '武汉 信创 采购', '武汉 数字政府 招标',
+        '武汉 国资云 招标', '武汉 东湖高新区 信息化 采购',
+        'site:ggzy.hubei.gov.cn 武汉 信息化', 'site:ccgp-hubei.gov.cn 武汉 软件',
+        'site:wuhan.gov.cn 数字 采购 公告',
+    ]
+
+    # 武汉本地招投标平台域名 — 用于 source_url 标注与高亮
+    LOCAL_PLATFORM_DOMAINS = [
+        'ggzy.hubei.gov.cn',      # 湖北省公共资源交易中心
+        'ccgp-hubei.gov.cn',      # 湖北政府采购网
+        'wuhan.gov.cn',           # 武汉市政府采购
+        'whggzy.com',             # 武汉公共资源交易
+        'ccgp.gov.cn',            # 中国政府采购网
     ]
 
     DIGITAL_KEYWORDS = [
@@ -108,6 +123,11 @@ class BiddingSpider(scrapy.Spider):
                     company_id, company_name = self._match_company(text)
                     project_type = self._extract_project_type(text)
 
+                    # 本地平台来源标注: 提升真实性与权重
+                    source_name = f'websearch_{source}'
+                    if any(d in url.lower() for d in self.LOCAL_PLATFORM_DOMAINS):
+                        source_name = f'local_{source}'
+
                     item = BiddingItem()
                     item['company_id'] = company_id
                     item['company_name'] = company_name
@@ -117,7 +137,7 @@ class BiddingSpider(scrapy.Spider):
                     item['is_digital'] = is_digital
                     item['bid_date'] = bid_date
                     item['source_url'] = url
-                    item['source_name'] = f'websearch_{source}'
+                    item['source_name'] = source_name
 
                     self.stats['items_yielded'] += 1
                     if is_digital:
