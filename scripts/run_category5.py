@@ -311,6 +311,8 @@ def main():
     parser.add_argument("--no-deepseek", action="store_true", help="跳过DeepSeek评级")
     parser.add_argument("--resume", action="store_true",
                         help="续跑模式: 从数据库取 status='raw' 企业继续处理 (不导入CSV)")
+    parser.add_argument("--csv-only", action="store_true",
+                        help="resume模式限定为本名录CSV中的企业 (--resume 配合使用)")
     args = parser.parse_args()
 
     logger.info("=" * 60)
@@ -321,13 +323,29 @@ def main():
         # 续跑模式: 处理所有 status='raw' 的企业
         import psycopg2
         conn = psycopg2.connect(DATABASE_URL)
-        with conn.cursor() as cur:
+        if args.csv_only:
+            # 只处理本名录 CSV 中的 raw 企业 (避免连带其他名录)
+            with open(CSV_PATH, encoding="utf-8-sig") as f:
+                csv_names = {(row.get("company_name") or "").strip()
+                             for row in csv.DictReader(f)}
+            csv_names.discard("")
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, company_name, business_scope FROM companies "
+                "WHERE status = 'raw' AND company_name = ANY(%s) ORDER BY id",
+                (list(csv_names),))
+            companies = [{"id": r[0], "company_name": r[1], "business_scope": r[2]}
+                         for r in cur.fetchall()]
+            conn.close()
+            logger.info(f"续跑模式(本名录CSV限定): {len(companies)} 家 raw 企业")
+        else:
+            cur = conn.cursor()
             cur.execute("SELECT id, company_name, business_scope FROM companies WHERE status = 'raw' ORDER BY id")
             companies = [{"id": r[0], "company_name": r[1], "business_scope": r[2]} for r in cur.fetchall()]
-        conn.close()
+            conn.close()
+            logger.info(f"续跑模式: 数据库 raw 企业 {len(companies)} 家")
         if args.limit > 0:
             companies = companies[:args.limit]
-        logger.info(f"续跑模式: 数据库 raw 企业 {len(companies)} 家")
         if not companies:
             logger.info("无 raw 企业需要处理")
             return
