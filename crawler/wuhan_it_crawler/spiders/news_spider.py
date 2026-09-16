@@ -53,15 +53,21 @@ class NewsSpider(scrapy.Spider):
         'RETRY_TIMES': 3,
     }
 
-    def __init__(self, mode='incremental', company=None, *args, **kwargs):
+    # 合法评级等级 (顺序固定 S > A > B > C > D)
+    ALL_LEVELS = ('S', 'A', 'B', 'C', 'D')
+
+    def __init__(self, mode='incremental', company=None, levels=None, *args, **kwargs):
         """
         Args:
             mode: 'incremental' (仅搜索新企业) 或 'full' (全量重搜)
             company: 可选，指定单个企业名称 (调试用)
+            levels: 可选，按已有评级等级筛选企业，如 'S,A' / ['S','A'] (热点追踪用)。
+                    指定后忽略 mode，只抓取该等级企业。
         """
         super().__init__(*args, **kwargs)
         self.mode = mode
         self.company_override = company
+        self.levels = self._parse_levels(levels)
         self.companies = []
         self.stats = {
             'search_requests': 0,
@@ -480,6 +486,21 @@ class NewsSpider(scrapy.Spider):
 
         return None
 
+    @classmethod
+    def _parse_levels(cls, levels):
+        """解析 levels 参数: 'S,A' / 'S，A' / ['S','A'] → ['S','A']
+
+        非法项丢弃, 按 S>A>B>C>D 顺序去重。
+        """
+        if levels is None or levels == '':
+            return []
+        if isinstance(levels, str):
+            items = levels.replace('，', ',').split(',')
+        else:
+            items = [str(i) for i in levels]
+        wanted = {i.strip().upper() for i in items if i and i.strip()}
+        return [lv for lv in cls.ALL_LEVELS if lv in wanted]
+
     def _load_companies(self):
         """从数据库读取企业列表"""
         settings = get_project_settings()
@@ -497,6 +518,24 @@ class NewsSpider(scrapy.Spider):
                         "SELECT id, company_name FROM companies WHERE company_name = %s",
                         (self.company_override,),
                     )
+                elif self.levels:
+                    # 热点追踪: 只处理指定评级等级的企业
+                    # 同一企业有 rules_engine / deepseek 两条评级时优先取 deepseek
+                    cur.execute(
+                        """
+                        SELECT c.id, c.company_name
+                        FROM companies c
+                        JOIN LATERAL (
+                            SELECT rating_level
+                            FROM ratings
+                            WHERE company_id = c.id AND rating_level = ANY(%s)
+                            ORDER BY (rated_by = 'deepseek') DESC, rated_at DESC
+                            LIMIT 1
+                        ) r ON TRUE
+                        ORDER BY c.id
+                        """,
+                        (self.levels,),
+                    )
                 elif self.mode == 'incremental':
                     # 增量模式: 只处理 status='raw' 的新企业, 避免重爬已评分企业
                     cur.execute(
@@ -510,7 +549,12 @@ class NewsSpider(scrapy.Spider):
                     for row in cur.fetchall()
                 ]
             conn.close()
-            self.logger.info(f"加载企业 {len(self.companies)} 家")
+            if self.levels:
+                self.logger.info(
+                    f"加载企业 {len(self.companies)} 家 (等级筛选: {','.join(self.levels)})"
+                )
+            else:
+                self.logger.info(f"加载企业 {len(self.companies)} 家")
         except Exception as e:
             self.logger.error(f"加载企业列表失败: {e}")
 

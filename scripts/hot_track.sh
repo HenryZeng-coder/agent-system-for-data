@@ -10,9 +10,9 @@ echo "🔥 热点追踪开始 $(date)"
 echo "🔍 搜索最新动态..."
 cd crawler && scrapy crawl news -a levels=S,A && cd ..
 
-# 2. 重新评级有变化的企业
-echo "🤖 重新评级..."
-python engine/llm_client.py --mode hot_track
+# 2. 重新评级有变化的企业 (仅 S/A 级)
+echo "🤖 重新评级 (S/A)..."
+python engine/llm_client.py --mode hot_track --levels S,A
 
 # 3. 生成追踪报告
 echo "📊 追踪报告..."

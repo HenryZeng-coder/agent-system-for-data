@@ -12,7 +12,7 @@ import time
 import logging
 import os
 import requests
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -420,9 +420,167 @@ class LLMRatingClient:
                 conn.close()
 
 
-if __name__ == "__main__":
-    from dotenv import load_dotenv
+# ====================================================================
+# 评级流程 (CLI 与 scripts/run_deepseek_rating.py 共用)
+# ====================================================================
+
+# 等级顺序固定 S > A > B > C > D
+ALL_LEVELS = ("S", "A", "B", "C", "D")
+
+
+def parse_levels(raw: Optional[Union[str, List[str]]] = None) -> List[str]:
+    """解析等级参数: 'S,A' / 'S，A' / ['S','A'] → ['S','A']
+
+    非法项被丢弃, 返回值按 S>A>B>C>D 顺序去重。
+    """
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, str):
+        items = raw.replace("，", ",").split(",")
+    else:
+        items = [str(i) for i in raw]
+    wanted = {i.strip().upper() for i in items if i and i.strip()}
+    return [lv for lv in ALL_LEVELS if lv in wanted]
+
+
+def select_companies_by_levels(database_url: str, levels: List[str]) -> List[Dict]:
+    """按已有评级等级筛选企业 (热点追踪重评用)
+
+    同一企业同时存在 rules_engine / deepseek 两条评级时优先取 deepseek。
+    返回字段与 RatingRulesEngine.get_companies_for_llm 对齐, 额外附带 recent_news。
+    """
+    import psycopg2
+
+    conn = psycopg2.connect(database_url)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT c.id, c.company_name, c.capital_amount, c.business_scope,
+                       c.industry_tags, r.total_score, r.rating_level,
+                       COALESCE(tp.ai_job_ratio, 0), tp.cloud_provider,
+                       COALESCE(tp.has_github_org, FALSE), COALESCE(tp.has_tech_blog, FALSE),
+                       (
+                           SELECT string_agg(x.txt, ' ')
+                           FROM (
+                               SELECT COALESCE(n.title, '') || ' ' || COALESCE(n.content_summary, '') AS txt
+                               FROM news_mentions n
+                               WHERE n.company_id = c.id
+                               ORDER BY n.published_at DESC NULLS LAST
+                               LIMIT 5
+                           ) x
+                       ) AS recent_news
+                FROM companies c
+                JOIN LATERAL (
+                    SELECT total_score, rating_level
+                    FROM ratings
+                    WHERE company_id = c.id AND rating_level = ANY(%s)
+                    ORDER BY (rated_by = 'deepseek') DESC, rated_at DESC
+                    LIMIT 1
+                ) r ON TRUE
+                LEFT JOIN tech_profiles tp ON tp.company_id = c.id
+                ORDER BY r.total_score DESC NULLS LAST, c.id
+                """,
+                (list(levels),),
+            )
+            columns = [desc[0] for desc in cur.description]
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    results = []
+    for row in rows:
+        item = dict(zip(columns, row))
+        item["company_id"] = item["id"]  # batch_rate/update_database 依赖 company_id
+        item["recent_news"] = item.get("recent_news") or ""
+        results.append(item)
+    return results
+
+
+def run_batch_rating(database_url: str, api_key: str, mode: str = "incremental",
+                     levels=None, limit: int = 0, client_kwargs: Optional[Dict] = None) -> List[Dict]:
+    """完整评级流程: 选企 → 分批评级 → 写库
+
+    Args:
+        mode:        评级模式, 同时作为断点续跑进度文件的 key
+        levels:      非空时只重评这些等级的企业 (热点追踪); 为空则取规则引擎达标企业
+        limit:       >0 时只处理前 N 家 (小样本验证)
+
+    Returns:
+        成功解析的评级结果列表 (空列表表示无结果或全部失败)
+    """
     import os
+    import sys
+
+    # 保证 `python engine/llm_client.py` 方式运行时也能 import engine 包
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    levels = parse_levels(levels)
+
+    if levels:
+        companies = select_companies_by_levels(database_url, levels)
+        logger.info(f"按等级重评 [{','.join(levels)}]: 共 {len(companies)} 家")
+    else:
+        from engine.rules_engine import RatingRulesEngine
+
+        engine = RatingRulesEngine()
+        companies = engine.get_companies_for_llm(database_url)
+        logger.info(f"规则引擎达标企业 (>= {engine.pass_threshold} 分): {len(companies)} 家")
+
+    if limit > 0:
+        companies = companies[:limit]
+        logger.info(f"--limit {limit}: 只处理前 {len(companies)} 家")
+
+    if not companies:
+        logger.warning("没有待评级企业, 退出")
+        return []
+
+    client = LLMRatingClient(api_key=api_key, **(client_kwargs or {"max_tokens": 8000, "batch_size": 3}))
+    results = client.batch_rate(companies, mode=mode)
+
+    if results:
+        client.update_database(results, database_url)
+        logger.info(f"DeepSeek 评级完成: {len(results)} 家")
+    else:
+        logger.warning("DeepSeek 评级无结果 (检查 API Key 与网络)")
+
+    from collections import Counter
+
+    logger.info(f"DeepSeek 评级分布: {dict(Counter(r.get('level') for r in results))}")
+    return results
+
+
+if __name__ == "__main__":
+    import argparse
+
+    from dotenv import load_dotenv
+
     load_dotenv()
-    client = LLMRatingClient(api_key=os.getenv("DEEPSEEK_API_KEY", ""))
-    print("DeepSeek客户端就绪 (增强版: 429自适应退避 + 断点续跑)")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+    parser = argparse.ArgumentParser(
+        description="DeepSeek 批量评级 (429自适应退避 + 断点续跑)"
+    )
+    parser.add_argument(
+        "--mode", default="incremental", choices=["incremental", "full", "hot_track"],
+        help="评级模式, 同时作为断点续跑进度文件的 key (默认: incremental)",
+    )
+    parser.add_argument(
+        "--levels", default="",
+        help="仅重评指定等级的企业, 如 S,A (热点追踪用); 留空则取规则引擎达标企业",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=0,
+        help="只处理前 N 家 (0=全部, 小样本验证用)",
+    )
+    args = parser.parse_args()
+
+    db_url = os.getenv("DATABASE_URL", "")
+    api_key = os.getenv("DEEPSEEK_API_KEY", "")
+    if not db_url or not api_key or api_key.startswith("your"):
+        logger.error("缺少 DATABASE_URL 或 DEEPSEEK_API_KEY, 请检查 .env")
+        raise SystemExit(1)
+
+    run_batch_rating(db_url, api_key, mode=args.mode, levels=args.levels, limit=args.limit)
