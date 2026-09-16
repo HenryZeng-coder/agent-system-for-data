@@ -31,11 +31,8 @@ class DedupPipeline:
         self.seen_bidding = set()  # (company_id, project_name, source_name)
 
     @classmethod
-    def from_crawler(self, cls, crawler):
+    def from_crawler(cls, crawler):
         return cls(database_url=crawler.settings.get('DATABASE_URL'))
-
-        # TechProfileItem 会话内去重
-        self._session_tech_company_ids = set()
 
     def open_spider(self, spider):
         self.conn = psycopg2.connect(self.database_url)
