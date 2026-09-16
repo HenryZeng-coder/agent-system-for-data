@@ -22,3 +22,6 @@ ddddocr>=1.5
 # 数据处理/导出
 pandas>=2.1
 openpyxl>=3.1
+
+#package
+beautifulsoup4
