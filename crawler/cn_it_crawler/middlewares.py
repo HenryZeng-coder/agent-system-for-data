@@ -52,13 +52,17 @@ class UARotateMiddleware:
     """User-Agent 随机轮换中间件 — 使用 UARotator + AntiDetect 随机头"""
 
     def __init__(self, ua_rotator=None, anti_detect=None):
-        if ua_rotator is not None or anti_detect is not None:
-            self.ua_rotator = ua_rotator or UARotator()
-            self.anti_detect = anti_detect or AntiDetect(ua_rotator=self.ua_rotator)
-        else:
-            _, UARotator, AntiDetect = _import_utils()
-            self.ua_rotator = UARotator()
-            self.anti_detect = AntiDetect(ua_rotator=self.ua_rotator)
+        # UARotator / AntiDetect 由 _import_utils() 延迟导入, 必须在此处局部绑定后再使用
+        if ua_rotator is None:
+            _, UARotator, _ = _import_utils()
+            ua_rotator = UARotator()
+
+        if anti_detect is None:
+            _, _, AntiDetect = _import_utils()
+            anti_detect = AntiDetect(ua_rotator=ua_rotator)
+
+        self.ua_rotator = ua_rotator
+        self.anti_detect = anti_detect
 
     def process_request(self, request, spider):
         headers = self.anti_detect.generate_headers()

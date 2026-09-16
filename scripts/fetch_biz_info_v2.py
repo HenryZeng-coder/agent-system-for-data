@@ -13,6 +13,7 @@
 import os
 import re
 import csv
+import json
 import sys
 import time
 import logging
@@ -86,7 +87,6 @@ def fetch_baike(name: str) -> dict:
 
 def main():
     import argparse
-    import json
 
     parser = argparse.ArgumentParser(description="第二渠道补全: 必应定位真实注册名 → 详情页提取信用代码")
     parser.add_argument("--in", dest="in_path", default=DEFAULT_IN, help="待补全 CSV (上一渠道输出)")
