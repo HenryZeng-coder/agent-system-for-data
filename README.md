@@ -1,5 +1,13 @@
 # 全国企业智能化转型评级系统 (E-InfoInsight-National)
 
+<div align="center">
+<img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" alt="Python"/>
+<img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white" alt="Windows"/>
+<img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS"/>
+<img src="https://img.shields.io/badge/iOS-000000?logo=apple&logoColor=white" alt="iOS"/>
+<img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android"/>
+</div>
+
 面向**全国范围**企业的智能化转型潜在客户评级系统：从公开渠道采集企业工商/技术/招聘/舆情/招投标
 多维数据，先用**规则引擎**做 5 维度加权初筛，再由 **DeepSeek** 做深度评级，输出 S/A/B/C/D 等级、
 需求标签与销售话术，形成可直接使用的销售线索清单。
