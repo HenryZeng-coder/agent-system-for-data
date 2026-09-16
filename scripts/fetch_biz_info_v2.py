@@ -1,4 +1,3 @@
-import json
 #!/usr/bin/env python3
 """第二渠道: 必应搜索定位真实注册名 → 爱企查/水滴信用详情页 → 提取信用代码
 
@@ -12,6 +11,7 @@ import json
 import os
 import re
 import csv
+import json
 import sys
 import time
 import logging
@@ -83,7 +83,6 @@ def fetch_baike(name: str) -> dict:
 
 
 def main():
-    import json
     with open(IN_PATH, encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
 

@@ -1,3 +1,4 @@
 pytest>=7.4
 pytest-cov>=4.1
 ipython>=8.0
+flake8>=7.0        # CI (GitHub Actions) 用同一套 lint 规则, 本地装它可提前复现
