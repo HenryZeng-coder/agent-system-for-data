@@ -31,7 +31,7 @@ class DedupPipeline:
         self.seen_bidding = set()  # (company_id, project_name, source_name)
 
     @classmethod
-    def from_crawler(cls, crawler):
+    def from_crawler(self, cls, crawler):
         return cls(database_url=crawler.settings.get('DATABASE_URL'))
 
         # TechProfileItem 会话内去重
