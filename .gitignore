@@ -7,15 +7,10 @@ __pycache__/
 # 环境变量
 .env
 
-# 数据目录
+# 数据目录 (data/reports/ 下的报告产物需入库跟踪, 故不设忽略规则)
 data/raw/
 data/scored/
 data/rated/
-data/reports/*.csv
-data/reports/*.xlsx
-data/reports/*.md
-# individual.csv 是全链路最终产出, 需入库跟踪
-!data/reports/individual.csv
 
 # Scrapy
 crawler/jobs/
@@ -32,12 +27,10 @@ crawler/.scrapy
 .vscode/
 .idea/
 
-# 临时文件
+# 临时文件 (*.log 默认忽略, 但 logs/ 下的运行日志需入库跟踪)
 *.log
+!logs/*.log
 *.tmp
-
-# macOS
-.DS_Store
 
 # 运行时状态
 .llm_progress.json

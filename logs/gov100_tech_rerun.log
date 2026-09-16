@@ -1,0 +1,231 @@
+2026-08-20 11:51:28 [scrapy.utils.log] INFO: Scrapy 2.17.0 started (bot: wuhan_it_crawler)
+2026-08-20 11:51:28 [scrapy.utils.log] INFO: Versions:
+{'lxml': '6.1.1',
+ 'libxml2': '2.14.6',
+ 'cssselect': '1.5.0',
+ 'parsel': '1.11.0',
+ 'w3lib': '2.4.1',
+ 'Twisted': '26.4.0',
+ 'Python': '3.11.15 (main, Jun 23 2026, 15:46:51) [Clang 22.1.3 ]',
+ 'pyOpenSSL': '26.4.0 (OpenSSL 4.0.1 9 Jun 2026)',
+ 'cryptography': '50.0.0',
+ 'Platform': 'macOS-15.7.3-arm64-arm-64bit'}
+2026-08-20 11:51:28 [tech] INFO: 加载企业 100 家
+2026-08-20 11:51:28 [scrapy.addons] INFO: Enabled addons:
+[]
+2026-08-20 11:51:28 [scrapy.extensions.telnet] INFO: Telnet Password: <REDACTED>
+2026-08-20 11:51:28 [scrapy.middleware] INFO: Enabled extensions:
+['scrapy.extensions.corestats.CoreStats',
+ 'scrapy.extensions.logcount.LogCount',
+ 'scrapy.extensions.telnet.TelnetConsole',
+ 'scrapy.extensions.memusage.MemoryUsage',
+ 'scrapy.extensions.logstats.LogStats',
+ 'scrapy.extensions.spiderstate.SpiderState']
+2026-08-20 11:51:28 [scrapy.crawler] INFO: Overridden settings:
+{'BOT_NAME': 'wuhan_it_crawler',
+ 'CONCURRENT_REQUESTS': 8,
+ 'CONCURRENT_REQUESTS_PER_DOMAIN': 1,
+ 'DOWNLOAD_DELAY': 6.5,
+ 'DOWNLOAD_TIMEOUT': 30,
+ 'JOBDIR': 'jobs/default',
+ 'LOG_LEVEL': 'INFO',
+ 'NEWSPIDER_MODULE': 'wuhan_it_crawler.spiders',
+ 'RETRY_TIMES': 3,
+ 'SPIDER_MODULES': ['wuhan_it_crawler.spiders'],
+ 'USER_AGENT': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+               'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 '
+               'Safari/537.36'}
+2026-08-20 11:51:28 [scrapy.middleware] INFO: Enabled downloader middlewares:
+['scrapy.downloadermiddlewares.offsite.OffsiteMiddleware',
+ 'wuhan_it_crawler.middlewares.ProxyMiddleware',
+ 'wuhan_it_crawler.middlewares.UARotateMiddleware',
+ 'scrapy.downloadermiddlewares.httpauth.HttpAuthMiddleware',
+ 'wuhan_it_crawler.middlewares.RetryMiddleware',
+ 'scrapy.downloadermiddlewares.downloadtimeout.DownloadTimeoutMiddleware',
+ 'scrapy.downloadermiddlewares.defaultheaders.DefaultHeadersMiddleware',
+ 'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware',
+ 'scrapy.downloadermiddlewares.retry.RetryMiddleware',
+ 'scrapy.downloadermiddlewares.redirect.MetaRefreshMiddleware',
+ 'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware',
+ 'scrapy.downloadermiddlewares.redirect.RedirectMiddleware',
+ 'scrapy.downloadermiddlewares.cookies.CookiesMiddleware',
+ 'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware',
+ 'scrapy.downloadermiddlewares.stats.DownloaderStats']
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/core/downloader/middleware.py:46: ScrapyDeprecationWarning: ProxyMiddleware.process_request() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_request)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/core/downloader/middleware.py:52: ScrapyDeprecationWarning: ProxyMiddleware.process_exception() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_exception)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/core/downloader/middleware.py:46: ScrapyDeprecationWarning: UARotateMiddleware.process_request() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_request)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/core/downloader/middleware.py:46: ScrapyDeprecationWarning: RetryMiddleware.process_request() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_request)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/core/downloader/middleware.py:49: ScrapyDeprecationWarning: RetryMiddleware.process_response() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_response)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/core/downloader/middleware.py:52: ScrapyDeprecationWarning: RetryMiddleware.process_exception() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_exception)
+
+2026-08-20 11:51:28 [scrapy.middleware] INFO: Enabled spider middlewares:
+['scrapy.spidermiddlewares.start.StartSpiderMiddleware',
+ 'scrapy.spidermiddlewares.httperror.HttpErrorMiddleware',
+ 'scrapy.spidermiddlewares.referer.RefererMiddleware',
+ 'scrapy.spidermiddlewares.urllength.UrlLengthMiddleware',
+ 'scrapy.spidermiddlewares.depth.DepthMiddleware']
+2026-08-20 11:51:28 [wuhan_it_crawler.pipelines.filter_pipeline] INFO: 加载分层词库: 强=23, 中=26, 弱=8, 排除=25
+2026-08-20 11:51:28 [scrapy.middleware] INFO: Enabled item pipelines:
+['wuhan_it_crawler.pipelines.dedup_pipeline.DedupPipeline',
+ 'wuhan_it_crawler.pipelines.filter_pipeline.FilterPipeline',
+ 'wuhan_it_crawler.pipelines.clean_pipeline.CleanPipeline',
+ 'wuhan_it_crawler.pipelines.validate_pipeline.ValidatePipeline',
+ 'wuhan_it_crawler.pipelines.standardize_pipeline.StandardizePipeline']
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:43: ScrapyDeprecationWarning: DedupPipeline.open_spider() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.open_spider)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:46: ScrapyDeprecationWarning: DedupPipeline.close_spider() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.close_spider)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:49: ScrapyDeprecationWarning: DedupPipeline.process_item() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_item)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:49: ScrapyDeprecationWarning: FilterPipeline.process_item() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_item)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:49: ScrapyDeprecationWarning: CleanPipeline.process_item() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_item)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:49: ScrapyDeprecationWarning: ValidatePipeline.process_item() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_item)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:43: ScrapyDeprecationWarning: StandardizePipeline.open_spider() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.open_spider)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:46: ScrapyDeprecationWarning: StandardizePipeline.close_spider() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.close_spider)
+
+2026-08-20 11:51:28 [py.warnings] WARNING: /Users/henry/Desktop/repository/E-InfoInsigth-agent-codes/.venv/lib/python3.11/site-packages/scrapy/pipelines/__init__.py:49: ScrapyDeprecationWarning: StandardizePipeline.process_item() requires a spider argument, this is deprecated and the argument will not be passed in future Scrapy versions. If you need to access the spider instance you can save the crawler instance passed to from_crawler() and use its spider attribute.
+  self._check_mw_method_spider_arg(mw.process_item)
+
+2026-08-20 11:51:28 [scrapy.core.engine] INFO: Spider opened
+2026-08-20 11:51:28 [scrapy.extensions.logstats] INFO: Crawled 0 pages (at 0 pages/min), scraped 0 items (at 0 items/min)
+2026-08-20 11:51:28 [scrapy.extensions.telnet] INFO: Telnet console listening on 127.0.0.1:6023
+2026-08-20 11:51:28 [tech] INFO: 启动技术能力爬虫, 企业数=100
+2026-08-20 11:52:28 [scrapy.extensions.logstats] INFO: Crawled 1 pages (at 1 pages/min), scraped 0 items (at 0 items/min)
+2026-08-20 11:53:28 [scrapy.extensions.logstats] INFO: Crawled 18 pages (at 17 pages/min), scraped 4 items (at 4 items/min)
+2026-08-20 11:54:28 [scrapy.extensions.logstats] INFO: Crawled 35 pages (at 17 pages/min), scraped 11 items (at 7 items/min)
+2026-08-20 11:55:28 [scrapy.extensions.logstats] INFO: Crawled 44 pages (at 9 pages/min), scraped 15 items (at 4 items/min)
+2026-08-20 11:56:28 [scrapy.extensions.logstats] INFO: Crawled 58 pages (at 14 pages/min), scraped 19 items (at 4 items/min)
+2026-08-20 11:57:28 [scrapy.extensions.logstats] INFO: Crawled 67 pages (at 9 pages/min), scraped 22 items (at 3 items/min)
+2026-08-20 11:58:28 [scrapy.extensions.logstats] INFO: Crawled 77 pages (at 10 pages/min), scraped 25 items (at 3 items/min)
+2026-08-20 11:59:28 [scrapy.extensions.logstats] INFO: Crawled 89 pages (at 12 pages/min), scraped 30 items (at 5 items/min)
+2026-08-20 12:00:28 [scrapy.extensions.logstats] INFO: Crawled 100 pages (at 11 pages/min), scraped 35 items (at 5 items/min)
+2026-08-20 12:01:28 [scrapy.extensions.logstats] INFO: Crawled 113 pages (at 13 pages/min), scraped 39 items (at 4 items/min)
+2026-08-20 12:02:28 [scrapy.extensions.logstats] INFO: Crawled 126 pages (at 13 pages/min), scraped 44 items (at 5 items/min)
+2026-08-20 12:03:28 [scrapy.extensions.logstats] INFO: Crawled 140 pages (at 14 pages/min), scraped 48 items (at 4 items/min)
+2026-08-20 12:04:28 [scrapy.extensions.logstats] INFO: Crawled 154 pages (at 14 pages/min), scraped 53 items (at 5 items/min)
+2026-08-20 12:05:28 [scrapy.extensions.logstats] INFO: Crawled 165 pages (at 11 pages/min), scraped 57 items (at 4 items/min)
+2026-08-20 12:05:58 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%AF%8C%E8%AF%9A%E6%B1%BD%E8%BD%A6%E9%9B%B6%E9%83%A8%E4%BB%B6&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:06:11 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%A8%B2%E7%9F%B3%E6%B0%B4%E6%B3%A5%E9%9B%86%E5%9B%A2&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:06:23 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%9B%9B%E6%96%B9%E5%85%89%E7%94%B5%E8%82%A1%E4%BB%BD&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:06:28 [scrapy.extensions.logstats] INFO: Crawled 180 pages (at 15 pages/min), scraped 62 items (at 5 items/min)
+2026-08-20 12:06:46 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%AE%9D%E6%AD%A6%E8%BD%BB%E6%9D%90%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:07:11 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%B2%A9%E8%81%94%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:07:19 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%BA%B7%E6%98%8E%E6%96%AF%E7%94%B5%E5%8A%9B%28%E4%B8%AD%E5%9B%BD%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:07:27 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%81%92%E6%98%8C%E6%96%B0%E8%83%BD%E6%BA%90%28%E6%B9%96%E5%8C%97%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:07:28 [scrapy.extensions.logstats] INFO: Crawled 194 pages (at 14 pages/min), scraped 62 items (at 0 items/min)
+2026-08-20 12:07:36 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%B7%B4%E5%A3%AB%E9%BA%A6%E6%99%AE%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:07:43 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%B8%83%E6%9E%97%E5%87%AF%E6%96%AF%28%29%E7%94%9F%E7%89%A9%E6%8A%80%E6%9C%AF&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:07:52 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%B9%BF%E9%92%A2%E6%B0%94%E4%BD%93%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:08:08 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E5%BA%B7%E6%98%8E%E6%96%AF%E7%87%83%E6%B2%B9%E7%B3%BB%E7%BB%9F%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:08:28 [scrapy.extensions.logstats] INFO: Crawled 204 pages (at 10 pages/min), scraped 62 items (at 0 items/min)
+2026-08-20 12:08:51 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%89%AC%E5%AD%90%E6%B1%9F%E6%B1%BD%E8%BD%A6%E9%9B%86%E5%9B%A2&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:09:13 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%99%AE%E5%AE%99&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:10:57 [scrapy.extensions.logstats] INFO: Crawled 214 pages (at 10 pages/min), scraped 63 items (at 1 items/min)
+2026-08-20 12:11:07 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%8B%9C%E5%B0%94%E6%B6%B2%E5%8E%8B%E5%8A%A8%E5%8A%9B%28%29%E8%82%A1%E4%BB%BD&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:11:22 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%8D%B7%E7%A6%8F%E8%A3%85%E5%A4%87%28%29%E8%82%A1%E4%BB%BD&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:11:30 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%98%82%E8%9E%8D%E7%84%8A%E6%8E%A5%E6%8A%80%E6%9C%AF%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:11:44 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%95%B0%E7%A0%81%E6%A8%A1%E5%86%B2%E5%8E%8B%E6%8A%80%E6%9C%AF%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:11:53 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%99%93%E7%AD%AC%28%29%E6%9C%BA%E7%94%B5%E9%9B%86%E6%88%90%E7%B3%BB%E7%BB%9F&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:12:02 [scrapy.extensions.logstats] INFO: Crawled 227 pages (at 13 pages/min), scraped 63 items (at 0 items/min)
+2026-08-20 12:12:19 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%99%BA%E6%96%B0%E5%8D%8A%E5%AF%BC%E4%BD%93&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:12:48 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%99%BA%E6%96%B0%E6%8E%A7%E5%88%B6%E7%B3%BB%E7%BB%9F&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:12:58 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%9C%B5%E9%A2%90%28%29%E4%BE%9B%E5%BA%94%E9%93%BE&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:13:02 [scrapy.extensions.logstats] INFO: Crawled 238 pages (at 11 pages/min), scraped 64 items (at 1 items/min)
+2026-08-20 12:13:06 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%9C%97%E5%8A%9B%E7%94%9F%E7%89%A9%E5%8C%BB%E8%8D%AF%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:20:51 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%9F%8F%E4%B8%BA%28%29%E5%8C%BB%E7%96%97%E8%82%A1%E4%BB%BD&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:20:52 [scrapy.extensions.logstats] INFO: Crawled 249 pages (at 11 pages/min), scraped 65 items (at 1 items/min)
+2026-08-20 12:20:59 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%A0%BC%E5%8A%9B%E6%9A%96%E9%80%9A%E5%88%B6%E5%86%B7%E8%AE%BE%E5%A4%87%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:21:09 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%9C%A8%E6%A1%A5%28%29%E6%B1%BD%E8%BD%A6%E9%9B%B6%E9%83%A8%E4%BB%B6&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:21:14 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%A3%AE%E7%BB%87%E6%B1%BD%E8%BD%A6%E5%86%85%E9%A5%B0%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:21:23 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%A0%BC%E6%9E%97%E7%BE%8E%28%29%E5%9F%8E%E5%B8%82%E7%9F%BF%E5%B1%B1%E4%BA%A7%E4%B8%9A%E9%9B%86%E5%9B%A2&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:21:29 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%A0%BC%E7%91%9E%E6%8B%93%E5%8A%A8%E5%8A%9B%E8%82%A1%E4%BB%BD&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:26:07 [scrapy.extensions.logstats] INFO: Crawled 260 pages (at 11 pages/min), scraped 66 items (at 1 items/min)
+2026-08-20 12:31:21 [scrapy.extensions.logstats] INFO: Crawled 263 pages (at 3 pages/min), scraped 66 items (at 0 items/min)
+2026-08-20 12:31:38 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%83%E7%8E%AF%E7%94%B5%E6%B0%94%E8%82%A1%E4%BB%BD&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:35:51 [scrapy.core.downloader.tls] WARNING: Remote certificate is not valid for hostname "www.hbztdq.com"; VerificationError(errors=[DNSMismatch(mismatched_id=DNS_ID(hostname=b'www.hbztdq.com'))])
+2026-08-20 12:36:01 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%89%E5%92%8C%E5%85%B4%E6%A8%A1%E5%85%B7%E6%8A%80%E6%9C%AF&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:36:10 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E6%AD%A3%E6%B3%B0%E9%AB%98%E5%8E%8B%E7%94%B5%E6%B0%94%E8%AE%BE%E5%A4%87%28%29&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:36:16 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%87%E5%B1%85%E9%9A%86%E7%94%B5%E5%99%A8&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:36:26 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%87%E6%9B%A6%E6%99%BA%E8%83%BD&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:36:26 [scrapy.extensions.logstats] INFO: Crawled 280 pages (at 17 pages/min), scraped 71 items (at 5 items/min)
+2026-08-20 12:40:50 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%80%E5%86%B6%E9%92%A2%E7%BB%93%E6%9E%84&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:56:38 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%89%E6%96%B0%E7%94%B5%E5%8A%9B%E8%AE%BE%E5%A4%87%E5%88%B6%E9%80%A0&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:56:45 [scrapy.extensions.logstats] INFO: Crawled 289 pages (at 9 pages/min), scraped 73 items (at 2 items/min)
+2026-08-20 12:56:47 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%87%E5%85%B4%E6%B1%BD%E8%BD%A6%E9%9B%B6%E9%85%8D%E4%BB%B6%E5%88%B6%E9%80%A0&per_page=5, error=Ignoring non-200 response
+2026-08-20 12:57:13 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%87%E9%82%A6%E6%BF%80%E5%85%89%E9%87%91%E5%88%9A%E7%9F%B3%E5%B7%A5%E5%85%B7%E8%82%A1%E4%BB%BD&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:12:40 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%87%E9%9B%86%E5%85%89%E7%94%B5%E6%8A%80%E6%9C%AF&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:12:46 [scrapy.extensions.logstats] INFO: Crawled 299 pages (at 10 pages/min), scraped 76 items (at 3 items/min)
+2026-08-20 13:29:29 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%89%E5%AE%87%E6%9C%BA%E6%A2%B0&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:29:39 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%89%E5%B7%A5%E5%85%89%E7%94%B5%E8%AE%BE%E5%A4%87%E5%88%B6%E9%80%A0&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:29:55 [scrapy.extensions.logstats] INFO: Crawled 307 pages (at 8 pages/min), scraped 80 items (at 4 items/min)
+2026-08-20 13:30:04 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%89%E6%B1%9F%E4%B8%AD%E7%94%B5&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:30:13 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%96%E7%BA%AA%E5%AE%8F%E8%AE%BE%E5%A4%87%E5%88%B6%E9%80%A0&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:30:26 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%9C%E6%B5%B7%E6%95%8F%E5%AE%9E%E6%B1%BD%E8%BD%A6%E9%9B%B6%E9%83%A8%E4%BB%B6&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:30:33 [scrapy.core.downloader.tls] WARNING: Remote certificate is not valid for hostname "www.wdacs.com"; Certificate does not contain any `subjectAltName`s.
+2026-08-20 13:30:33 [scrapy.core.downloader.tls] WARNING: Remote certificate is not valid for hostname "www.wdacs.com"; Certificate does not contain any `subjectAltName`s.
+2026-08-20 13:30:36 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%9C%E7%8E%AF%E8%BD%A6%E8%BA%AB%E7%B3%BB%E7%BB%9F&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:30:55 [scrapy.extensions.logstats] INFO: Crawled 319 pages (at 12 pages/min), scraped 87 items (at 7 items/min)
+2026-08-20 13:40:21 [tech] ERROR: 请求失败: https://gitee.com/api/v5/search/repositories?q=%E4%B8%9C%E6%B3%B0%E7%9B%9B%E6%9C%BA%E6%A2%B0&per_page=5, error=Ignoring non-200 response
+2026-08-20 13:40:21 [scrapy.core.engine] INFO: Closing spider (finished)
+2026-08-20 13:40:21 [wuhan_it_crawler.pipelines.standardize_pipeline] INFO: StandardizePipeline 关闭: 插入=89, 更新=0
+2026-08-20 13:40:21 [tech] INFO: 技术能力爬虫结束: 处理企业=89, 产出=89, GitHub发现=0, 丢弃=0
+2026-08-20 13:40:21 [scrapy.statscollectors] INFO: Dumping Scrapy stats:
+{'downloader/exception_count': 1,
+ 'downloader/exception_type_count/scrapy.exceptions.DownloadTimeoutError': 1,
+ 'downloader/request_bytes': 724414,
+ 'downloader/request_count': 418,
+ 'downloader/request_method_count/GET': 418,
+ 'downloader/response_bytes': 8887160,
+ 'downloader/response_count': 417,
+ 'downloader/response_status_count/200': 277,
+ 'downloader/response_status_count/301': 7,
+ 'downloader/response_status_count/302': 87,
+ 'downloader/response_status_count/403': 45,
+ 'downloader/response_status_count/429': 1,
+ 'elapsed_time_seconds': 1730.935384875047,
+ 'finish_reason': 'finished',
+ 'finish_time': datetime.datetime(2026, 8, 20, 5, 40, 21, 490621, tzinfo=datetime.timezone.utc),
+ 'httpcompression/response_bytes': 40209724,
+ 'httpcompression/response_count': 192,
+ 'item_scraped_count': 89,
+ 'items_per_minute': 0.8175137783221066,
+ 'log_count/ERROR': 45,
+ 'log_count/INFO': 34,
+ 'log_count/WARNING': 3,
+ 'memusage/max': 133955584,
+ 'memusage/startup': 73482240,
+ 'request_depth_max': 3,
+ 'response_received_count': 322,
+ 'responses_per_minute': 2.9577464788732395,
+ 'retry/count': 2,
+ 'retry/reason_count/429 Unknown Status': 1,
+ 'retry/reason_count/scrapy.exceptions.DownloadTimeoutError': 1,
+ 'scheduler/dequeued': 418,
+ 'scheduler/dequeued/disk': 418,
+ 'scheduler/enqueued': 418,
+ 'scheduler/enqueued/disk': 418,
+ 'start_time': datetime.datetime(2026, 8, 20, 3, 51, 28, 543874, tzinfo=datetime.timezone.utc)}
+2026-08-20 13:40:21 [scrapy.core.engine] INFO: Spider closed (finished)
