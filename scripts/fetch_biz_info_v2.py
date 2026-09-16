@@ -6,7 +6,10 @@
 2. 再搜索真实注册名, 定位 aiqicha/qcc/shuidi 详情页
 3. 访问详情页提取信用代码 (百度百科API优先)
 
-输出: data/potential_companies/biz_info_5_v2.csv (增量合并)
+输出: data/potential_companies/biz_info_5_v2.csv (整表写回)
+
+用法: python scripts/fetch_biz_info_v2.py [--in PATH] [--out PATH] [--limit N]
+      --limit 用于小样本试跑, 不加则处理全部待补企业 (每家企业都会发必应搜索请求)
 """
 import os
 import re
@@ -83,11 +86,25 @@ def fetch_baike(name: str) -> dict:
 
 
 def main():
-    with open(IN_PATH, encoding="utf-8-sig") as f:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="第二渠道补全: 必应定位真实注册名 → 百科提取信用代码")
+    parser.add_argument("--in", dest="in_path", default=IN_PATH,
+                        help="待补全 CSV (上一渠道输出, 默认 biz_info_5.csv)")
+    parser.add_argument("--out", dest="out_path", default=OUT_PATH,
+                        help="结果输出 CSV (默认 biz_info_5_v2.csv)")
+    parser.add_argument("--limit", type=int, default=0,
+                        help="只处理前 N 家待补企业 (0=全部, 小样本试跑用)")
+    args = parser.parse_args()
+
+    with open(args.in_path, encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
 
     # 只处理未命中的企业
     missing = [r for r in rows if not r.get("credit_code")]
+    if args.limit > 0:
+        missing = missing[:args.limit]
     logger.info(f"总{len(rows)}家, 待补 {len(missing)} 家")
 
     updated = 0
@@ -127,14 +144,14 @@ def main():
             logger.info(f"   ✗ 仍未找到")
 
     # 写回 v2 (全量)
-    with open(OUT_PATH, "w", newline="", encoding="utf-8-sig") as f:
+    with open(args.out_path, "w", newline="", encoding="utf-8-sig") as f:
         cols = ["company_name", "credit_code", "legal_rep", "address", "established", "capital", "source"]
         writer = csv.DictWriter(f, fieldnames=cols)
         writer.writeheader()
         for r in rows:
             writer.writerow({k: r.get(k, "") for k in cols})
 
-    logger.info(f"完成: 新增命中 {updated}/{len(missing)} → {OUT_PATH}")
+    logger.info(f"完成: 新增命中 {updated}/{len(missing)} → {args.out_path}")
 
 
 if __name__ == "__main__":
