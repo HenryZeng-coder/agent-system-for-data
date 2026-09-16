@@ -495,7 +495,12 @@ class NewsSpider(scrapy.Spider):
                 if self.company_override:
                     cur.execute(
                         "SELECT id, company_name FROM companies WHERE company_name = %s",
-                        (self.company_override,)
+                        (self.company_override,),
+                    )
+                elif self.mode == 'incremental':
+                    # 增量模式: 只处理 status='raw' 的新企业, 避免重爬已评分企业
+                    cur.execute(
+                        "SELECT id, company_name FROM companies WHERE status = 'raw' ORDER BY id"
                     )
                 else:
                     cur.execute("SELECT id, company_name FROM companies ORDER BY id")

@@ -63,8 +63,9 @@ class RecruitmentSpider(scrapy.Spider):
         'RETRY_TIMES': 3,
     }
 
-    def __init__(self, company=None, *args, **kwargs):
+    def __init__(self, mode='incremental', company=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.mode = mode
         self.company_override = company
         self.companies = []
         self.stats = {
@@ -298,6 +299,11 @@ class RecruitmentSpider(scrapy.Spider):
                     cur.execute(
                         "SELECT id, company_name FROM companies WHERE company_name = %s",
                         (self.company_override,),
+                    )
+                elif self.mode == 'incremental':
+                    # 增量模式: 只处理 status='raw' 的新企业, 避免重爬已评分企业
+                    cur.execute(
+                        "SELECT id, company_name FROM companies WHERE status = 'raw' ORDER BY id"
                     )
                 else:
                     cur.execute("SELECT id, company_name FROM companies ORDER BY id")

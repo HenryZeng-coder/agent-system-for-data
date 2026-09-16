@@ -263,9 +263,11 @@ class BiddingSpider(scrapy.Spider):
         try:
             conn = psycopg2.connect(database_url)
             with conn.cursor() as cur:
-                cur.execute("SELECT id, company_name FROM companies")
+                cur.execute(
+                    "SELECT company_name, id FROM companies WHERE status = 'raw'"
+                )
                 for row in cur.fetchall():
-                    self.companies_map[row[1]] = row[0]
+                    self.companies_map[row[0]] = row[1]
             conn.close()
             self.logger.info(f"加载企业映射 {len(self.companies_map)} 家")
         except Exception as e:
