@@ -1,9 +1,9 @@
 <div align="center">
-< img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" alt="Python"/>
-< img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white" alt="Windows"/>
-< img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS"/>
-< img src="https://img.shields.io/badge/iOS-000000?logo=apple&logoColor=white" alt="iOS"/>
-< img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android"/>
+<img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" alt="Python"/>
+<img src="https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white" alt="Windows"/>
+<img src="https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white" alt="macOS"/>
+<img src="https://img.shields.io/badge/iOS-000000?logo=apple&logoColor=white" alt="iOS"/>
+<img src="https://img.shields.io/badge/Android-3DDC84?logo=android&logoColor=white" alt="Android"/>
 </div>
 # 武汉IT企业智能评级系统 (E-InfoInsight)
 
