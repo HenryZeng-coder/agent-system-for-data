@@ -1,0 +1,155 @@
+# ============================================================
+# 评分规则配置 v2 — 数据感知自适应评分
+# 与 rules_engine.py 对应
+# ============================================================
+
+# 评级阈值（配置化，保持原始分界线 S/A/B/C/D）
+level_thresholds:
+  S: 80
+  A: 60
+  B: 40
+  C: 20
+  # D: < 20
+
+tech_investment:
+  weight: 30
+  rules:
+    ai_job_ratio:
+      threshold: 0.2
+      comparison: ">="          # 修复：原代码硬编码 ">"，改为可配置 ">="
+      score: 15
+    cloud_provider:
+      score: 5
+    github_org:
+      score: 5
+    tech_blog:
+      score: 5
+  # 经营范围兜底：数据缺失时用 scope 推断技术投入下限
+  scope_tech_fallback:
+    enabled: true
+    rules:
+      - keywords: ["人工智能", "AI"]
+        tech_min: 10
+      - keywords: ["软件开发", "大数据", "云计算"]
+        tech_min: 8
+      - keywords: ["信息技术", "系统集成"]
+        tech_min: 5
+
+funding:
+  weight: 25                    # 20→25，容纳 capital_scale 梯度
+  rules:
+    funding_stage:
+      B: 15
+      C: 15
+      A: 10
+      D: 5                      # 10→5，D阶段(后期/困境)吸引力低于A阶段(成长)
+    registered_capital:
+      threshold: 1000
+      score: 5
+    # 注册资本梯度加分（取最高匹配档）
+    capital_scale:
+      - threshold: 50000        # ≥5亿
+        score: 8
+      - threshold: 10000        # ≥1亿
+        score: 5
+      - threshold: 5000         # ≥5000万
+        score: 3
+
+transformation_intent:
+  weight: 30                    # 25→30，容纳 scope_intent + cross_boost
+  rules:
+    news_keywords:
+      - "数字"
+      - "转型"
+      - "AI"
+      - "智能"
+      - "云"
+      - "大模型"
+      - "中台"
+      - "数据中台"
+      - "工业互联网"
+      - "智慧"
+      - "信息化"
+    score_per_match: 5
+    max_score: 20
+    digital_bidding:
+      score: 10
+  # 经营范围推断意向：新闻/招投标稀疏时用 scope 推断转型意向
+  scope_intent:
+    enabled: true
+    rules:
+      - keywords: ["人工智能", "AI"]
+        score: 5
+      - keywords: ["数字化转型", "智慧", "智能化"]
+        score: 5
+      - keywords: ["云计算", "大数据"]
+        score: 3
+  # 跨维度加成
+  cross_boost:
+    # 技术投入高 → 转型意向也高
+    tech_threshold: 25
+    intent_bonus: 5
+    # 大型成熟技术企业有数字化转型需求
+    capital_tech_boost:
+      capital_threshold: 5000
+      tech_threshold: 10
+      intent_bonus: 5
+
+team_size:
+  weight: 15
+  rules:
+    hiring_count:
+      - min: 50
+        score: 15
+      - min: 20
+        score: 10
+      - min: 5
+        score: 5
+      - min: 0
+        score: 0
+  # 招聘数据稀疏时用注册资本推断团队规模下限
+  team_fallback:
+    enabled: true
+    rules:
+      - capital_threshold: 50000  # ≥5亿 → 推断 team≥10
+        team_min: 10
+      - capital_threshold: 5000   # ≥5000万 → 推断 team≥5
+        team_min: 5
+
+industry_match:
+  weight: 10
+  rules:
+    high_match_keywords:
+      # 原有 5 个
+      - "云计算"
+      - "人工智能"
+      - "大数据"
+      - "系统集成"
+      - "软件开发"
+      # 新增 7 个（与原有非重叠，避免子串重复计分）
+      - "AI"
+      - "数字化"
+      - "网络安全"
+      - "机器人"
+      - "物联网"
+      - "通信技术"
+      - "光纤"
+    high_score_per_match: 2
+    low_match_keywords:
+      - "运维"
+      - "硬件"
+      - "网络工程"
+      - "监控"
+    low_score_per_match: -1
+
+it_filter_keywords:
+  - "软件"
+  - "信息技术"
+  - "科技"
+  - "数据"
+  - "互联网"
+  - "云计算"
+  - "人工智能"
+  - "智能"
+  - "IT"
+  - "数字化"

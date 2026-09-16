@@ -1,0 +1,10 @@
+{
+  "_说明": "可选。复制为 config/known_tech.json 后生效（scripts/supplement_tech.py 读取）。键为企业工商全名。",
+  "示例甲科技有限公司": {
+    "cloud_provider": "阿里云",
+    "has_github_org": true,
+    "github_org": "example-org",
+    "has_tech_blog": true,
+    "tech_stack": ["Java", "Kubernetes", "Flink"]
+  }
+}

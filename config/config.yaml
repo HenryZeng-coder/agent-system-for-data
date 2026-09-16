@@ -1,0 +1,56 @@
+# ============================================================
+# 全国企业智能化转型评级系统 - 全局配置
+# ============================================================
+
+# ---- 采集范围 (核心开关) ----
+# national: 全国, 搜索词不加地域前缀, 不做地域过滤
+# province: 指定省, 如 province: 湖北
+# city:     指定市, 如 province: 湖北 + city: 武汉 (等价于原武汉版)
+region:
+  scope: national
+  province: ""
+  city: ""
+  local_domains: []          # 可选: 本地行业/招投标站点域名, 用于来源标注
+
+database:
+  url: "postgresql://localhost:5432/rating_system_national"   # 亦可通过 DATABASE_URL 环境变量覆盖
+  pool_size: 5
+  max_overflow: 10
+
+deepseek:
+  api_key_env: "DEEPSEEK_API_KEY"
+  base_url: "https://api.deepseek.com/v1"
+  model: "deepseek-v4-flash"
+  temperature: 0.1
+  max_tokens: 500
+  timeout: 30
+  batch_size: 5
+  rate_limit_seconds: 0.5
+
+crawler:
+  concurrent_requests: 8
+  concurrent_per_domain: 2
+  download_delay: 0.5
+  download_timeout: 30
+  retry_times: 3
+  jobdir: "jobs/default"
+
+proxy:
+  enabled: true
+  pool_api_env: "PROXY_POOL_API"
+  max_failures: 3
+  check_interval: 300
+
+scoring:
+  pass_threshold: 60
+  rules_config: "config/scoring_rules.yaml"
+
+schedule:
+  daily_incremental: "0 2 * * *"
+  hot_track: "0 */6 * * *"
+  full_scan: "manual"
+
+report:
+  output_dir: "data/reports"
+  lead_levels: ["S", "A"]
+  notify_on_new_leads: true
