@@ -136,14 +136,20 @@ pip install -r requirements.txt -r requirements-dev.txt
 # 3. 安装 Playwright 浏览器
 playwright install chromium
 
-# 4. 启动 PostgreSQL 并创建数据库
+# 4. 启动 PostgreSQL
 brew services start postgresql@18        # 若装的是 16 则改为 postgresql@16
-createdb rating_system
 
-# 5. 初始化表结构 + 种子数据
-psql -d rating_system -f db/init.sql
-psql -d rating_system -f db/seed_real.sql    # 真实企业种子（推荐）
-# psql -d rating_system -f db/seed.sql       # 或使用测试种子数据
+# 5. 一键建库: 建库 + 建表 + 灌种子数据 + 打印验收统计
+bash scripts/init_db.sh                  # 真实企业种子 db/seed_real.sql（默认, 推荐）
+# bash scripts/init_db.sh --demo         # 改用演示种子 db/seed.sql（10 家虚构企业）
+# bash scripts/init_db.sh --drop         # 推倒重建（清空目标库）
+# bash scripts/init_db.sh --help         # 查看全部选项
+
+# 手动等价操作（脚本内部即依次执行下列命令, 可按需手敲）:
+#   createdb rating_system
+#   psql -d rating_system -f db/init.sql
+#   psql -d rating_system -f db/seed_real.sql    # 真实企业种子
+#   psql -d rating_system -f db/seed.sql         # 或演示种子（两者可叠加, 不会串数据）
 
 # 6. 配置环境变量
 cp .env.example .env
