@@ -146,11 +146,18 @@ source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 playwright install chromium
 
-# 3. 数据库
+# 3. 数据库 (一键建库: 建库 + 建表 + 灌种子数据 + 验收统计)
 brew services start postgresql@18        # 或 postgresql@16
-createdb rating_system_national
-psql -d rating_system_national -f db/init.sql
-psql -d rating_system_national -f db/seed_real.sql   # 或 db/seed.sql（虚构样例）
+bash scripts/init_db.sh                  # 默认 db/seed_real.sql（真实企业名, 工商字段待爬）
+# bash scripts/init_db.sh --demo         # 改用 db/seed.sql（10 家虚构样例）
+# bash scripts/init_db.sh --drop         # 推倒重建
+# bash scripts/init_db.sh --help         # 查看全部选项
+
+# 手动等价操作（脚本内部即依次执行下列命令）:
+#   createdb rating_system_national
+#   psql -d rating_system_national -f db/init.sql
+#   psql -d rating_system_national -f db/seed_real.sql   # 或 db/seed.sql
+#   （两种种子已支持任意顺序/重复执行, 不会串数据或重复叠行）
 
 # 4. 环境变量
 cp .env.example .env
@@ -302,3 +309,10 @@ python -m pytest tests/test_spiders/ -v    # 爬虫离线测试（Item/管道/�
    - `engine/llm_client.py` 缺少 CLI 入口导致 `.sh` 脚本的评级步骤空转；
    - `news_spider` 的 `-a levels=S,A` 被静默忽略，热点追踪无法按等级筛企；
    - `crawler/cn_it_crawler/settings.py` 与 `scripts/integrated_crawl.py` 的 `.env` 路径多上溯了一层。
+7. 种子脚本的幂等性/关联问题（2026-10 修复）：
+   - `db/seed_real.sql` 的 `credit_code` 全为 NULL，而 `ON CONFLICT (credit_code)` 对 NULL
+     永不触发 → 重复执行会不断叠出重复企业。已改为按 `company_name` 判重的 `WHERE NOT EXISTS`；
+   - `db/seed.sql` / `db/seed_real.sql` 的子表原先硬编码 `company_id=1..10`，且缺 `ON CONFLICT`：
+     两个种子叠加执行时会报唯一键冲突，或把招聘/新闻/招投标错挂到别的企业名下。
+     已改为按 `credit_code`（seed.sql）／`company_name`（seed_real.sql）关联解析 id，
+     并补齐 `ON CONFLICT` 业务唯一键。两种种子现可任意顺序、任意次数执行。
